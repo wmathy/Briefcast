@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  follows      Follow[]
+}
+
+model Show {
+  id          String    @id @default(cuid())
+  itunesId    String    @unique
+  title       String
+  artist      String
+  feedUrl     String
+  artworkUrl  String?
+  description String    @default("")
+  createdAt   DateTime  @default(now())
+  follows     Follow[]
+  episodes    Episode[]
+}
+
+model Follow {
+  userId    String
+  showId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+
+  @@id([userId, showId])
+}
+
+model Episode {
+  id          String      @id @default(cuid())
+  showId      String
+  guid        String
+  title       String
+  publishedAt DateTime
+  link        String?
+  audioUrl    String?
+  description String      @default("")
+  guest       String?
+  seeded      Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  show        Show        @relation(fields: [showId], references: [id], onDelete: Cascade)
+  brief       Brief?
+  recapAudio  RecapAudio?
+
+  @@unique([showId, guid])
+}
+
+model Brief {
+  id             String   @id @default(cuid())
+  episodeId      String   @unique
+  overview       String
+  segmentsJson   String
+  takeawaysJson  String
+  spokenRecap    String
+  sourceType     String
+  confidenceNote String?
+  guest          String?
+  createdAt      DateTime @default(now())
+  episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+}
+
+model RecapAudio {
+  id        String   @id @default(cuid())
+  episodeId String   @unique
+  mimeType  String   @default("audio/mpeg")
+  data      Bytes
+  createdAt DateTime @default(now())
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+}
