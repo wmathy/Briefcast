@@ -10,8 +10,6 @@ import type { BriefSegment } from "@/lib/brief";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-
   const { id } = await params;
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
@@ -19,6 +17,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     include: { show: true, brief: true, recapAudio: true },
   });
   if (!episode) notFound();
+  if (!user && !episode.seeded) redirect("/login");
 
   const segments = episode.brief
     ? (JSON.parse(episode.brief.segmentsJson) as BriefSegment[])

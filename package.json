@@ -12,7 +12,9 @@
     "db:prepare": "node scripts/prepare-db.mjs"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "@prisma/adapter-better-sqlite3": "^7.9.1",
+    "@prisma/adapter-libsql": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",

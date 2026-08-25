@@ -37,10 +37,12 @@ yarn-error.log*
 # local sqlite + generated client
 /prisma/*.db
 /prisma/*.db-journal
+!/prisma/seed.db
 /src/generated/
 
 # vercel
 .vercel
+.vercel/
 
 # typescript
 *.tsbuildinfo

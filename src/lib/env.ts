@@ -37,11 +37,11 @@ export function authSecret(): string {
 }
 
 export function sqliteFilePath(): string {
-  if (process.env.DATABASE_URL?.startsWith("file:")) {
-    return process.env.DATABASE_URL.slice("file:".length);
-  }
   if (process.env.VERCEL) {
     return "/tmp/briefcast.db";
+  }
+  if (process.env.DATABASE_URL?.startsWith("file:")) {
+    return process.env.DATABASE_URL.slice("file:".length);
   }
   return path.join(process.cwd(), "prisma", "dev.db");
 }

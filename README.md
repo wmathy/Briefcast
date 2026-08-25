@@ -47,7 +47,11 @@ This is a standard Next.js App Router app (`vercel.json` + `next build`).
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.
 3. `DATABASE_URL` can stay unset. The build seeds SQLite; on Vercel the file is copied to `/tmp` so the preview is clickable. Writes there are ephemeral — use hosted Postgres later if you want a durable production database.
 
-**Preview:** a Vercel preview URL will be added here once the GitHub project is linked (or when this PR’s deployment finishes). Until then, run locally or deploy from the Vercel dashboard.
+**Clickable preview:** [https://temporary-swift-zenith-5xesxjv.vercel.app](https://temporary-swift-zenith-5xesxjv.vercel.app)
+
+Anonymous Vercel demo (SQLite under `/tmp`). Sample briefs work without a key. Sign up works; follows can reset between serverless instances. It expires in about an hour unless you [claim the deployment](https://vercel.com/claim-deployment?code=fd25bc94-4a12-4eb2-9b5e-e0e27ffc0f86).
+
+For a durable preview, import this GitHub repo in Vercel and set `AUTH_SECRET` plus `XAI_API_KEY`.
 
 ```bash
 npx vercel

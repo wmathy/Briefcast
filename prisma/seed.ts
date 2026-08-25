@@ -1,10 +1,11 @@
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaLibSql } from "@prisma/adapter-libsql";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { SEED_EPISODES, SEED_SHOWS } from "../src/lib/seed-data";
 import { sqliteUrl } from "../src/lib/env";
 
 async function main() {
-  const adapter = new PrismaBetterSqlite3({ url: sqliteUrl() });
+  const url = process.env.DATABASE_URL ?? sqliteUrl();
+  const adapter = new PrismaLibSql({ url });
   const prisma = new PrismaClient({ adapter });
 
   for (const show of SEED_SHOWS) {

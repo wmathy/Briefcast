@@ -68,7 +68,26 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
     where: { id: session.id },
     select: { id: true, email: true },
   });
-  return user;
+  if (user) return user;
+
+  const byEmail = await prisma.user.findUnique({
+    where: { email: session.email },
+    select: { id: true, email: true },
+  });
+  if (byEmail) return byEmail;
+
+  try {
+    await prisma.user.create({
+      data: {
+        id: session.id,
+        email: session.email,
+        passwordHash: "unusable-replica",
+      },
+    });
+  } catch {
+    // another request may have created the replica row
+  }
+  return session;
 }
 
 export function validateEmail(email: string): string | null {
