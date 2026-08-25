@@ -1,12 +1,8 @@
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { PrismaClient } from "../src/generated/prisma/client";
+import { createPrismaClient } from "../src/lib/db";
 import { SEED_EPISODES, SEED_SHOWS } from "../src/lib/seed-data";
-import { sqliteUrl } from "../src/lib/env";
 
 async function main() {
-  const url = process.env.DATABASE_URL ?? sqliteUrl();
-  const adapter = new PrismaLibSql({ url });
-  const prisma = new PrismaClient({ adapter });
+  const prisma = createPrismaClient();
 
   for (const show of SEED_SHOWS) {
     await prisma.show.upsert({

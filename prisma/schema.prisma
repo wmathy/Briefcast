@@ -3,6 +3,7 @@ generator client {
   output   = "../src/generated/prisma"
 }
 
+// prisma.config.ts rewrites provider to postgresql when DATABASE_URL is a Postgres URL.
 datasource db {
   provider = "sqlite"
 }

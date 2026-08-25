@@ -49,3 +49,17 @@ export function sqliteFilePath(): string {
 export function sqliteUrl(): string {
   return `file:${sqliteFilePath()}`;
 }
+
+export function databaseUrl(): string {
+  const configured = process.env.DATABASE_URL?.trim();
+  if (configured) return configured;
+  return sqliteUrl();
+}
+
+export function isPostgresDatabaseUrl(url = databaseUrl()): boolean {
+  return /^postgres(ql)?:\/\//i.test(url);
+}
+
+export function databaseProvider(url = databaseUrl()): "postgresql" | "sqlite" {
+  return isPostgresDatabaseUrl(url) ? "postgresql" : "sqlite";
+}

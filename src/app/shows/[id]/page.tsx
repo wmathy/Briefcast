@@ -6,6 +6,8 @@ import { formatBriefDate } from "@/lib/brief";
 import { RefreshButton } from "@/components/RefreshButton";
 import { UnfollowButton } from "@/components/UnfollowButton";
 
+export const dynamic = "force-dynamic";
+
 export default async function ShowPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
