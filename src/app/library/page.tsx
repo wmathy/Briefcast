@@ -5,6 +5,8 @@ import { getPrisma } from "@/lib/db";
 import { SEED_EPISODES } from "@/lib/seed-data";
 import { formatBriefDate } from "@/lib/brief";
 
+export const dynamic = "force-dynamic";
+
 export default async function LibraryPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");

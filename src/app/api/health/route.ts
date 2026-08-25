@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { findBundledSeed } from "@/lib/db";
 import { getPrisma } from "@/lib/db";
-import { hasXaiKey, sqliteFilePath } from "@/lib/env";
+import { databaseProvider, hasXaiKey } from "@/lib/env";
 
 export async function GET() {
+  const provider = databaseProvider();
   try {
     const prisma = getPrisma();
     const [shows, episodes, briefs] = await Promise.all([
@@ -14,8 +15,9 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       hasXaiKey: hasXaiKey(),
-      dbPath: sqliteFilePath(),
-      seed: findBundledSeed(),
+      provider,
+      durable: provider === "postgresql",
+      seed: provider === "sqlite" ? findBundledSeed() : null,
       shows,
       episodes,
       briefs,
@@ -25,8 +27,9 @@ export async function GET() {
       {
         ok: false,
         hasXaiKey: hasXaiKey(),
-        dbPath: sqliteFilePath(),
-        seed: findBundledSeed(),
+        provider,
+        durable: provider === "postgresql",
+        seed: provider === "sqlite" ? findBundledSeed() : null,
         error: error instanceof Error ? error.message : "Database failed.",
       },
       { status: 500 },

@@ -1,8 +1,9 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
-import { sqliteFilePath, sqliteUrl } from "@/lib/env";
+import { databaseUrl, isPostgresDatabaseUrl, sqliteFilePath, sqliteUrl } from "@/lib/env";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
@@ -29,13 +30,22 @@ function prepareSqliteFile() {
   }
 }
 
+export function createPrismaClient(): PrismaClient {
+  const url = databaseUrl();
+  if (isPostgresDatabaseUrl(url)) {
+    const adapter = new PrismaPg(url);
+    return new PrismaClient({ adapter });
+  }
+  prepareSqliteFile();
+  const adapter = new PrismaLibSql({ url: sqliteUrl() });
+  return new PrismaClient({ adapter });
+}
+
 export function getPrisma(): PrismaClient {
   if (globalForPrisma.prisma) {
     return globalForPrisma.prisma;
   }
-  prepareSqliteFile();
-  const adapter = new PrismaLibSql({ url: sqliteUrl() });
-  const prisma = new PrismaClient({ adapter });
+  const prisma = createPrismaClient();
   globalForPrisma.prisma = prisma;
   return prisma;
 }

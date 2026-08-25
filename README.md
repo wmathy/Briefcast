@@ -19,13 +19,15 @@ Open [http://localhost:3000](http://localhost:3000). Sign up with any email + pa
 
 Without `XAI_API_KEY`, the UI still works. The library includes two real public NPR episodes with prewritten, notes-only briefs. **Generate brief + voice** tells you to add the key.
 
+Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATABASE_URL` at Postgres.
+
 ## Environment
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `XAI_API_KEY` | For generate | xAI chat completions write the brief; xAI TTS (`eve`, speed 1.2) speaks it. [console.x.ai](https://console.x.ai/) |
 | `AUTH_SECRET` | Recommended | Signs the login cookie. A long random string is fine. |
-| `DATABASE_URL` | Optional | Defaults to `file:./prisma/dev.db` (SQLite via Prisma). |
+| `DATABASE_URL` | Local: optional. **Vercel: required** | Local default is `file:./prisma/dev.db` (SQLite via Prisma). On Vercel set a hosted **Postgres** URL (Neon or any Postgres). SQLite under `/tmp` is not shared across serverless instances, so Follow would 404 on `/shows/[id]`. |
 
 TTS is **Grok Voice / xAI only**. Briefcast does not use edge-tts or any other synthesizer.
 
@@ -41,17 +43,15 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 ## Deploy on Vercel
 
-This is a standard Next.js App Router app (`vercel.json` + `next build`).
+This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the sample-brief seed.
 
 1. Import [github.com/wmathy/Briefcast](https://github.com/wmathy/Briefcast) in Vercel.
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.
-3. `DATABASE_URL` can stay unset. The build seeds SQLite; on Vercel the file is copied to `/tmp` so the preview is clickable. Writes there are ephemeral — use hosted Postgres later if you want a durable production database.
+3. Create a hosted Postgres database (Neon via the [Vercel Marketplace](https://vercel.com/marketplace) or [neon.tech](https://neon.tech) is fine).
+4. Set `DATABASE_URL` on **Production and Preview**, available at **Build and Runtime**. Use the **pooled** connection string and include `sslmode=require` if the host asks for SSL.
+5. Redeploy after saving the env vars. The build fails on purpose if `DATABASE_URL` is missing or still a SQLite `file:` URL.
 
-**Clickable preview:** [https://temporary-swift-zenith-5xesxjv.vercel.app](https://temporary-swift-zenith-5xesxjv.vercel.app)
-
-Anonymous Vercel demo (SQLite under `/tmp`). Sample briefs work without a key. Sign up works; follows can reset between serverless instances. It expires in about an hour unless you [claim the deployment](https://vercel.com/claim-deployment?code=fd25bc94-4a12-4eb2-9b5e-e0e27ffc0f86).
-
-For a durable preview, import this GitHub repo in Vercel and set `AUTH_SECRET` plus `XAI_API_KEY`.
+Do not paste real credentials into the repo. `.env.example` only shows the local SQLite default and a dummy Postgres shape.
 
 ```bash
 npx vercel
@@ -68,4 +68,4 @@ npm run lint
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind, Prisma + SQLite, iTunes Search API, RSS, xAI chat + TTS.
+Next.js App Router, TypeScript, Tailwind, Prisma (SQLite locally, Postgres on Vercel), iTunes Search API, RSS, xAI chat + TTS.

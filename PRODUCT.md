@@ -6,7 +6,7 @@ Friends follow **their own** podcasts and get a written episode brief plus a spo
 
 - Email + password accounts. No email is sent. No purchases.
 - Search the iTunes Search API and follow any show with a public RSS feed.
-- Persist users, follows, episodes, briefs, and spoken MP3 audio (SQLite).
+- Persist users, follows, episodes, briefs, and spoken MP3 audio (SQLite locally; hosted Postgres on Vercel).
 - Check for new episodes from a show’s RSS feed. Per-episode **Generate brief + voice**.
 - Written brief format:
   - Header: show, title, guest (if named in source), date, official link
@@ -23,4 +23,4 @@ Friends follow **their own** podcasts and get a written episode brief plus a spo
 - Automatic RSS polling on a schedule, not only a manual check
 - Shared listening queues and family accounts
 - Richer transcript providers when a show does not publish one
-- Postgres / object storage for a durable hosted deployment
+- Object storage for spoken recaps if the database outgrows in-row audio
