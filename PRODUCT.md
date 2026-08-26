@@ -13,7 +13,7 @@ Friends follow **their own** podcasts and get a written episode brief plus a spo
   - Two-sentence overview
   - Main segments in source order, with host vs guest when the source makes that clear
   - 4–6 takeaways
-- Source policy: prefer a real transcript when the feed exposes one. Otherwise use official show notes and show a confidence note. Do not invent quotes or topics.
+- Source policy: prefer a real transcript when one is publicly available (RSS `podcast:transcript`, an official episode/transcript page, or public captions such as YouTube). Otherwise use official show notes and show a confidence note. Do not invent quotes or topics.
 - Spoken recap via **Grok Voice / xAI TTS only** (`POST https://api.x.ai/v1/tts`, `voice_id: eve`, speed `1.2`). In-app HTML player defaults to `playbackRate` 1.2.
 - If `XAI_API_KEY` is missing, the full UI still runs. Two real public episodes ship with prewritten notes-only briefs. Generate fails with a message to add the key.
 

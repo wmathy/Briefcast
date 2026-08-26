@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { generateEpisodeBrief } from "@/lib/generate";
 import { MissingXaiKeyError } from "@/lib/env";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(
   _request: Request,
