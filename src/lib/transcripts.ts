@@ -1,4 +1,4 @@
-import { looksLikeTranscriptUrl, stripHtml } from "@/lib/html";
+import { decodeEntities, looksLikeTranscriptUrl, stripHtml } from "@/lib/html";
 
 export const SHOWNOTES_CONFIDENCE_NOTE =
   "This brief is based on official show notes, not a full transcript. Quotes and topics not present in the notes were not added.";
@@ -203,15 +203,18 @@ function extractPodscripts(html: string): string | null {
 }
 
 function extractNprTranscript(html: string): string | null {
-  const start = html.search(/aria-label="Transcript"/i);
-  const chunk = start >= 0 ? html.slice(start) : html;
-  const cut = chunk.split(/<footer\b|id="footer"|class="[^"]*\bfooter\b/i)[0] ?? chunk;
+  const tagged = html.match(/<[^>]*aria-label="Transcript"[^>]*>/i);
+  const start = tagged?.index ?? html.search(/aria-label="Transcript"/i);
+  if (start < 0) return null;
+  const fromOpenTag = html.slice(start);
+  const afterTag = fromOpenTag.replace(/^<[^>]+>/, "");
+  const cut = afterTag.split(/<footer\b|id="footer"|class="[^"]*\bfooter\b/i)[0] ?? afterTag;
   const text = stripHtml(cut.replace(/<svg[\s\S]*?<\/svg>/gi, "")).replace(/^Transcript\s*/i, "").trim();
   return looksLikeSpokenTranscript(text) ? text : null;
 }
 
 function cleanCaptionText(raw: string): string {
-  return raw
+  return decodeEntities(raw)
     .replace(/^#+\s.*$/gm, "")
     .replace(/^Source video:.*$/gm, "")
     .replace(/^Language:.*$/gm, "")

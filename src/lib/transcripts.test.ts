@@ -114,6 +114,7 @@ describe("parseTranscriptPayload", () => {
     const text = parseTranscriptPayload(html, "text/html", "https://www.npr.org/transcripts/nx-s1-5940897");
     expect(text).toContain("KENNY MALONE:");
     expect(text).not.toContain("Donate to NPR");
+    expect(text).not.toContain("aria-label");
   });
 
   it("returns empty for an NPR transcripts page with no spoken text", () => {
@@ -133,6 +134,16 @@ describe("parseTranscriptPayload", () => {
     const text = parseTranscriptPayload(html, "text/html", "https://podcasts.happyscribe.com/the-joe-rogan-experience/2545-jesse-michels");
     expect(text).toContain("Hi, Jesse.");
     expect(text).toContain("Spoken line number 7");
+  });
+
+  it("decodes YouTube caption markup", () => {
+    const raw = "# Transcript: Demo\n\n[0:03] &gt;&gt; The Joe Rogan Experience.\n[0:08] Hi, Jesse.";
+    expect(parseTranscriptPayload(raw, "text/markdown", "https://youtube-transcript.ai/transcript/33Fc_mLqY90.txt")).toContain(
+      "The Joe Rogan Experience.",
+    );
+    expect(parseTranscriptPayload(raw, "text/markdown", "https://youtube-transcript.ai/transcript/33Fc_mLqY90.txt")).not.toContain(
+      "&gt;",
+    );
   });
 
   it("keeps JSON podcast transcripts", () => {
