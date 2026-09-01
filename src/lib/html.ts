@@ -1,17 +1,23 @@
-export function stripHtml(input: string | undefined | null): string {
-  if (!input) return "";
+export function decodeEntities(input: string): string {
   return input
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/p>/gi, "\n\n")
-    .replace(/<\/(div|li|h[1-6])>/gi, "\n")
-    .replace(/<li>/gi, "• ")
-    .replace(/<[^>]+>/g, "")
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
+    .replace(/&gt;/g, ">");
+}
+
+export function stripHtml(input: string | undefined | null): string {
+  if (!input) return "";
+  return decodeEntities(
+    input
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<\/(div|li|h[1-6])>/gi, "\n")
+      .replace(/<li>/gi, "• ")
+      .replace(/<[^>]+>/g, ""),
+  )
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();

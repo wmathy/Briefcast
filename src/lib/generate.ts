@@ -31,6 +31,8 @@ export async function generateEpisodeBrief(episodeId: string) {
     description: episode.description,
     transcriptUrl,
     episodeLink: episode.link,
+    showTitle: episode.show.title,
+    episodeTitle: episode.title,
   });
 
   const brief = await writeBriefFromSource({

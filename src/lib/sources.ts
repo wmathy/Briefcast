@@ -1,4 +1,17 @@
-import { looksLikeTranscriptUrl, stripHtml } from "@/lib/html";
+import { looksLikeTranscriptUrl } from "@/lib/html";
+import {
+  SHOWNOTES_CONFIDENCE_NOTE,
+  collectYoutubeSearchVideos,
+  extractPageDiscoveries,
+  extractTranscriptUrlsFromText,
+  extractYoutubeVideoIds,
+  isUsableTranscript,
+  nprTranscriptUrls,
+  parseTranscriptPayload,
+  publicDirectoryUrls,
+  youtubeCaptionUrls,
+  youtubeTitlesMatch,
+} from "@/lib/transcripts";
 
 export type EpisodeSource = {
   text: string;
@@ -7,96 +20,207 @@ export type EpisodeSource = {
 };
 
 const MAX_SOURCE_CHARS = 80_000;
+const MAX_FETCH_ATTEMPTS = 10;
+const FETCH_TIMEOUT_MS = 12_000;
+
+const BRIEFCAST_UA = "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)";
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Briefcast/0.1";
 
 function trimSource(text: string): string {
   if (text.length <= MAX_SOURCE_CHARS) return text;
   return `${text.slice(0, MAX_SOURCE_CHARS)}\n\n[Source truncated for length.]`;
 }
 
-function parseTranscriptPayload(raw: string, contentType: string): string {
-  const type = contentType.toLowerCase();
-  if (type.includes("json") || raw.trim().startsWith("{") || raw.trim().startsWith("[")) {
-    try {
-      const data = JSON.parse(raw) as unknown;
-      if (typeof data === "string") return data;
-      if (Array.isArray(data)) {
-        return data
-          .map((row) => {
-            if (typeof row === "string") return row;
-            if (row && typeof row === "object") {
-              const item = row as Record<string, unknown>;
-              const speaker = typeof item.speaker === "string" ? item.speaker : "";
-              const body =
-                (typeof item.text === "string" && item.text) ||
-                (typeof item.body === "string" && item.body) ||
-                "";
-              return speaker ? `${speaker}: ${body}` : body;
-            }
-            return "";
-          })
-          .filter(Boolean)
-          .join("\n");
-      }
-      if (data && typeof data === "object") {
-        const record = data as Record<string, unknown>;
-        if (typeof record.transcript === "string") return record.transcript;
-        if (typeof record.text === "string") return record.text;
-      }
-    } catch {
-      // fall through to plain text
-    }
-  }
-  if (type.includes("html") || /<html|<p|<div/i.test(raw)) {
-    return stripHtml(raw);
-  }
-  return raw
-    .replace(/^\d+\s*$/gm, "")
-    .replace(/\d{2}:\d{2}:\d{2}[.,]\d{3}\s-->\s\d{2}:\d{2}:\d{2}[.,]\d{3}.*$/gm, "")
-    .trim();
+function shownotesSource(description: string): EpisodeSource {
+  const notes = description.trim();
+  return {
+    text: trimSource(notes || "No official show notes were available."),
+    sourceType: "shownotes",
+    confidenceNote: SHOWNOTES_CONFIDENCE_NOTE,
+  };
 }
 
-export async function fetchTranscript(url: string): Promise<string | null> {
+function transcriptSource(text: string): EpisodeSource {
+  return {
+    text: trimSource(text),
+    sourceType: "transcript",
+    confidenceNote: null,
+  };
+}
+
+function userAgentFor(url: string): string {
+  try {
+    const host = new URL(url).hostname;
+    if (
+      host.includes("youtube.com") ||
+      host.includes("youtu.be") ||
+      host.includes("youtube-transcript.ai") ||
+      host.includes("happyscribe.com") ||
+      host.includes("podscripts.co")
+    ) {
+      return BROWSER_UA;
+    }
+  } catch {
+    // keep default
+  }
+  return BRIEFCAST_UA;
+}
+
+async function fetchRaw(url: string, init: RequestInit = {}): Promise<{ text: string; contentType: string } | null> {
   try {
     const response = await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       headers: {
-        Accept: "text/plain, application/json, text/vtt, application/x-subrip, text/html",
-        "User-Agent": "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)",
+        "User-Agent": userAgentFor(url),
+        Accept: "text/plain, application/json, text/vtt, application/x-subrip, text/html, application/xml",
+        "Accept-Language": "en-US,en;q=0.9",
+        ...init.headers,
       },
     });
     if (!response.ok) return null;
-    const raw = await response.text();
-    const text = parseTranscriptPayload(raw, response.headers.get("content-type") ?? "");
-    return text.trim().length > 80 ? text : null;
+    const text = await response.text();
+    return { text, contentType: response.headers.get("content-type") ?? "" };
   } catch {
     return null;
   }
 }
 
+export async function fetchTranscript(url: string): Promise<string | null> {
+  const raw = await fetchRaw(url);
+  if (!raw) return null;
+  const text = parseTranscriptPayload(raw.text, raw.contentType, url);
+  return text.trim().length > 80 ? text : null;
+}
+
+type Candidate = {
+  url: string;
+  trust: "official" | "discovered";
+};
+
 export async function loadEpisodeSource(input: {
   description: string;
   transcriptUrl?: string | null;
   episodeLink?: string | null;
+  showTitle?: string | null;
+  episodeTitle?: string | null;
 }): Promise<EpisodeSource> {
-  const candidates = [input.transcriptUrl, input.episodeLink].filter(
+  const notes = input.description.trim();
+  const tried = new Set<string>();
+  let attempts = 0;
+
+  const tryUrl = async (url: string, trust: "official" | "discovered"): Promise<EpisodeSource | null> => {
+    if (!url || tried.has(url) || attempts >= MAX_FETCH_ATTEMPTS) return null;
+    tried.add(url);
+    attempts += 1;
+    const transcript = await fetchTranscript(url);
+    if (isUsableTranscript(transcript, notes, trust)) {
+      return transcriptSource(transcript!);
+    }
+    return null;
+  };
+
+  const tryCandidates = async (candidates: Candidate[]): Promise<EpisodeSource | null> => {
+    for (const candidate of candidates) {
+      const hit = await tryUrl(candidate.url, candidate.trust);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  const officialUrls = [input.transcriptUrl, input.episodeLink].filter(
     (url): url is string => Boolean(url && looksLikeTranscriptUrl(url)),
   );
+  const fromDescription = extractTranscriptUrlsFromText(input.description);
+  const fromNpr = nprTranscriptUrls(input.episodeLink);
 
-  for (const url of candidates) {
-    const transcript = await fetchTranscript(url);
-    if (transcript) {
-      return {
-        text: trimSource(transcript),
-        sourceType: "transcript",
-        confidenceNote: null,
-      };
+  const firstPass = await tryCandidates([
+    ...officialUrls.map((url) => ({ url, trust: "official" as const })),
+    ...fromDescription.map((url) => ({ url, trust: "official" as const })),
+    ...fromNpr.map((url) => ({ url, trust: "official" as const })),
+  ]);
+  if (firstPass) return firstPass;
+
+  for (const videoId of extractYoutubeVideoIds(input.description)) {
+    const hit = await tryYoutubeCaptions(videoId, tryUrl);
+    if (hit) return hit;
+  }
+
+  if (input.episodeLink && !looksLikeTranscriptUrl(input.episodeLink) && attempts < MAX_FETCH_ATTEMPTS) {
+    tried.add(input.episodeLink);
+    attempts += 1;
+    const page = await fetchRaw(input.episodeLink);
+    if (page) {
+      const discovered = extractPageDiscoveries(page.text, input.episodeLink);
+      const fromPage = await tryCandidates(discovered.transcriptUrls.map((url) => ({ url, trust: "official" as const })));
+      if (fromPage) return fromPage;
+      for (const videoId of discovered.youtubeIds) {
+        const hit = await tryYoutubeCaptions(videoId, tryUrl);
+        if (hit) return hit;
+      }
     }
   }
 
-  const notes = input.description.trim();
-  return {
-    text: trimSource(notes || "No official show notes were available."),
-    sourceType: "shownotes",
-    confidenceNote:
-      "This brief is based on official show notes, not a full transcript. Quotes and topics not present in the notes were not added.",
-  };
+  if (input.showTitle && input.episodeTitle && attempts < MAX_FETCH_ATTEMPTS) {
+    const videoId = await searchYoutubeVideoId(input.showTitle, input.episodeTitle);
+    if (videoId) {
+      const hit = await tryYoutubeCaptions(videoId, tryUrl);
+      if (hit) return hit;
+    }
+
+    const directories = await tryCandidates(
+      publicDirectoryUrls(input.showTitle, input.episodeTitle).map((url) => ({
+        url,
+        trust: "discovered" as const,
+      })),
+    );
+    if (directories) return directories;
+  }
+
+  return shownotesSource(notes);
+}
+
+async function tryYoutubeCaptions(
+  videoId: string,
+  tryUrl: (url: string, trust: "official" | "discovered") => Promise<EpisodeSource | null>,
+): Promise<EpisodeSource | null> {
+  for (const url of youtubeCaptionUrls(videoId)) {
+    const hit = await tryUrl(url, "discovered");
+    if (hit) return hit;
+  }
+  return null;
+}
+
+async function searchYoutubeVideoId(showTitle: string, episodeTitle: string): Promise<string | null> {
+  const query = `${showTitle} ${episodeTitle}`.replace(/\s+/g, " ").trim();
+  const payload = JSON.stringify({
+    context: {
+      client: {
+        clientName: "WEB",
+        clientVersion: "2.20240827.01.00",
+        hl: "en",
+        gl: "US",
+      },
+    },
+    query,
+  });
+
+  const raw = await fetchRaw("https://www.youtube.com/youtubei/v1/search?prettyPrint=false", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+  });
+  if (!raw) return null;
+
+  let data: unknown = null;
+  try {
+    data = JSON.parse(raw.text);
+  } catch {
+    return null;
+  }
+
+  const videos = collectYoutubeSearchVideos(data);
+  const match = videos.find((video) => youtubeTitlesMatch(showTitle, episodeTitle, video.title));
+  return match?.id ?? null;
 }

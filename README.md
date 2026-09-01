@@ -39,7 +39,7 @@ curl -X POST https://api.x.ai/v1/tts \
   --output recap.mp3
 ```
 
-Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. Transcripts or official show notes are fetched server-side first.
+Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. Generate looks for a real transcript first (RSS `podcast:transcript`, official episode/transcript pages, public YouTube captions, then public transcript pages) and falls back to official show notes with a confidence note. No extra API keys are required for that lookup.
 
 ## Deploy on Vercel
 
