@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 
 export const AUTH_COOKIE = "briefcast_session";
@@ -34,6 +35,26 @@ export function authSecret(): string {
     process.env.NEXTAUTH_SECRET?.trim() ||
     "briefcast-dev-only-change-me"
   );
+}
+
+/** Shared secret for the no-email password recovery form. Unset means recovery is disabled. */
+export function recoverySecret(): string | null {
+  const value = process.env.RECOVERY_SECRET?.trim();
+  return value ? value : null;
+}
+
+export function isRecoveryEnabled(): boolean {
+  return recoverySecret() !== null;
+}
+
+function sha256(value: string): Buffer {
+  return createHash("sha256").update(value).digest();
+}
+
+export function recoverySecretMatches(candidate: string): boolean {
+  const expected = recoverySecret();
+  if (!expected) return false;
+  return timingSafeEqual(sha256(candidate), sha256(expected));
 }
 
 export function sqliteFilePath(): string {

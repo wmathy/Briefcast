@@ -1,0 +1,94 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [secret, setSecret] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  if (!enabled) {
+    return (
+      <p className="rounded-2xl border border-line bg-bg-card p-4 text-sm leading-6 text-muted">
+        Password recovery is not enabled yet. Set <code className="text-ink">RECOVERY_SECRET</code>{" "}
+        on Vercel for Production and Preview, then Redeploy. After that, this page can reset an
+        existing account without sending email.
+      </p>
+    );
+  }
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        setError(null);
+        const response = await fetch("/api/auth/recover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, secret }),
+        });
+        const data = (await response.json()) as { error?: string };
+        setPending(false);
+        if (!response.ok) {
+          setError(data.error ?? "Something went wrong.");
+          return;
+        }
+        router.push("/library");
+        router.refresh();
+      }}
+    >
+      <p className="text-sm leading-6 text-muted">
+        Enter the account email, a new password, and the recovery secret from your Vercel env.
+        Briefcast does not send reset mail.
+      </p>
+      <label className="block space-y-1.5">
+        <span className="text-sm text-muted">Email</span>
+        <input
+          type="email"
+          autoComplete="email"
+          required
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-sm text-muted">New password</span>
+        <input
+          type="password"
+          autoComplete="new-password"
+          required
+          minLength={8}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+        />
+      </label>
+      <label className="block space-y-1.5">
+        <span className="text-sm text-muted">Recovery secret</span>
+        <input
+          type="password"
+          autoComplete="off"
+          required
+          value={secret}
+          onChange={(event) => setSecret(event.target.value)}
+          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+        />
+      </label>
+      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      <button
+        type="submit"
+        disabled={pending}
+        className="w-full rounded-full bg-accent py-2.5 font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+      >
+        {pending ? "Working…" : "Set new password"}
+      </button>
+    </form>
+  );
+}

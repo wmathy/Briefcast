@@ -1,8 +1,12 @@
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify } from "jose";
-import { AUTH_COOKIE, authSecret } from "@/lib/env";
+import { AUTH_COOKIE, authSecret, recoverySecret, recoverySecretMatches } from "@/lib/env";
 import { getPrisma } from "@/lib/db";
+
+export const RECOVERY_NOT_ENABLED = "Password recovery is not enabled yet.";
+export const RECOVERY_FAILED =
+  "Could not reset that password. Check the email and recovery secret.";
 
 export type SessionUser = {
   id: string;
@@ -101,4 +105,42 @@ export function validatePassword(password: string): string | null {
     return "Password must be at least 8 characters.";
   }
   return null;
+}
+
+export type RecoverPasswordResult =
+  | { ok: true; user: SessionUser }
+  | { ok: false; status: number; error: string };
+
+export async function recoverUserPassword(input: {
+  email: string;
+  password: string;
+  secret: string;
+}): Promise<RecoverPasswordResult> {
+  const email = validateEmail(input.email);
+  if (!email) {
+    return { ok: false, status: 400, error: "Enter a valid email address." };
+  }
+  const passwordError = validatePassword(input.password);
+  if (passwordError) {
+    return { ok: false, status: 400, error: passwordError };
+  }
+  if (!recoverySecret()) {
+    return { ok: false, status: 503, error: RECOVERY_NOT_ENABLED };
+  }
+  if (!input.secret.trim()) {
+    return { ok: false, status: 400, error: "Recovery secret is required." };
+  }
+
+  const prisma = getPrisma();
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!recoverySecretMatches(input.secret) || !user) {
+    return { ok: false, status: 401, error: RECOVERY_FAILED };
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(input.password) },
+    select: { id: true, email: true },
+  });
+  return { ok: true, user: updated };
 }

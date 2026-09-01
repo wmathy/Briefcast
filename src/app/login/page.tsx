@@ -10,6 +10,11 @@ export default async function LoginPage() {
       <h1 className="font-display text-4xl">Log in</h1>
       <AuthForm mode="login" />
       <p className="text-sm text-muted">
+        <Link className="text-accent hover:underline" href="/forgot-password">
+          Forgot password
+        </Link>
+      </p>
+      <p className="text-sm text-muted">
         New here?{" "}
         <Link className="text-accent hover:underline" href="/signup">
           Sign up
