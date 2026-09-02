@@ -2,6 +2,11 @@ import { getPrisma } from "@/lib/db";
 import type { ItunesPodcast } from "@/lib/itunes";
 import { fetchRssEpisodes } from "@/lib/rss";
 
+export type SyncedEpisode = {
+  id: string;
+  publishedAt: Date;
+};
+
 export async function upsertShowFromItunes(podcast: ItunesPodcast) {
   const prisma = getPrisma();
   return prisma.show.upsert({
@@ -27,7 +32,7 @@ export async function upsertShowFromItunes(podcast: ItunesPodcast) {
 export async function syncShowEpisodes(showId: string, feedUrl: string, limit = 20) {
   const prisma = getPrisma();
   const episodes = await fetchRssEpisodes(feedUrl, limit);
-  let created = 0;
+  const createdEpisodes: SyncedEpisode[] = [];
 
   for (const episode of episodes) {
     const existing = await prisma.episode.findUnique({
@@ -48,7 +53,7 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit = 
       });
       continue;
     }
-    await prisma.episode.create({
+    const created = await prisma.episode.create({
       data: {
         showId,
         guid: episode.guid,
@@ -60,8 +65,8 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit = 
         guest: episode.guest,
       },
     });
-    created += 1;
+    createdEpisodes.push({ id: created.id, publishedAt: created.publishedAt });
   }
 
-  return { fetched: episodes.length, created };
+  return { fetched: episodes.length, created: createdEpisodes.length, createdEpisodes };
 }

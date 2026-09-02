@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function RefreshButton({ showId }: { showId: string }) {
+export function RefreshLibraryButton() {
   const router = useRouter();
   const [label, setLabel] = useState("Check for new episodes");
   const [pending, setPending] = useState(false);
@@ -14,7 +14,7 @@ export function RefreshButton({ showId }: { showId: string }) {
       disabled={pending}
       onClick={async () => {
         setPending(true);
-        const response = await fetch(`/api/shows/${showId}/refresh`, { method: "POST" });
+        const response = await fetch("/api/queue/refresh", { method: "POST" });
         const data = (await response.json()) as {
           created?: number;
           generating?: number;
@@ -26,7 +26,11 @@ export function RefreshButton({ showId }: { showId: string }) {
           return;
         }
         if (data.generating) {
-          setLabel(data.created ? `Added ${data.created} · writing brief` : "Writing brief…");
+          setLabel(
+            data.created
+              ? `Added ${data.created} · writing brief`
+              : "Writing brief…",
+          );
         } else {
           setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
         }
