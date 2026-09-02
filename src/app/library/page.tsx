@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBriefDate } from "@/lib/brief";
-import { getFollowedBriefQueue, getFollowedShows } from "@/lib/queue";
+import { countUnbriefedFollowedEpisodes, getFollowedBriefQueue, getFollowedShows } from "@/lib/queue";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
 
 export const dynamic = "force-dynamic";
@@ -11,9 +11,10 @@ export default async function LibraryPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [follows, queue] = await Promise.all([
+  const [follows, queue, unbriefed] = await Promise.all([
     getFollowedShows(user.id),
     getFollowedBriefQueue(user.id),
+    countUnbriefedFollowedEpisodes(user.id),
   ]);
 
   return (
@@ -37,6 +38,12 @@ export default async function LibraryPage() {
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
         <p className="text-sm text-muted">Briefs for podcasts you follow, newest episode first.</p>
+        {unbriefed > 0 ? (
+          <p className="text-sm text-muted">
+            {unbriefed} followed episode{unbriefed === 1 ? "" : "s"} {unbriefed === 1 ? "has" : "have"} no
+            brief yet. New ones are written automatically.
+          </p>
+        ) : null}
         {queue.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
             {follows.length === 0

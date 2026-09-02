@@ -13,6 +13,16 @@ export async function getFollowedBriefQueue(userId: string) {
   });
 }
 
+export async function countUnbriefedFollowedEpisodes(userId: string) {
+  const prisma = getPrisma();
+  return prisma.episode.count({
+    where: {
+      brief: null,
+      show: { follows: { some: { userId } } },
+    },
+  });
+}
+
 export async function getFollowedShows(userId: string) {
   const prisma = getPrisma();
   return prisma.follow.findMany({

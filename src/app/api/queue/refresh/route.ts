@@ -1,6 +1,7 @@
 import { after, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { generateAutoBriefs, pollFollowedShowsAndGenerate } from "@/lib/auto-brief";
+import { hasXaiKey } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -21,6 +22,7 @@ export async function POST() {
     return NextResponse.json({
       created: poll.created,
       generating: poll.autoBriefIds.length,
+      canGenerate: hasXaiKey(),
       errors: poll.syncErrors,
     });
   } catch (error) {

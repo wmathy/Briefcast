@@ -18,6 +18,7 @@ export function RefreshLibraryButton() {
         const data = (await response.json()) as {
           created?: number;
           generating?: number;
+          canGenerate?: boolean;
           error?: string;
         };
         setPending(false);
@@ -25,16 +26,20 @@ export function RefreshLibraryButton() {
           setLabel(data.error ?? "Refresh failed");
           return;
         }
-        if (data.generating) {
+        if (data.generating && !data.canGenerate) {
           setLabel(
             data.created
-              ? `Added ${data.created} · writing brief`
-              : "Writing brief…",
+              ? `Added ${data.created} · add XAI_API_KEY to write briefs`
+              : "New episode found · add XAI_API_KEY",
           );
+        } else if (data.generating) {
+          setLabel(data.created ? `Added ${data.created} · writing brief` : "Writing brief…");
         } else {
           setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
         }
-        router.refresh();
+        if (data.created) {
+          router.refresh();
+        }
       }}
       className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
     >

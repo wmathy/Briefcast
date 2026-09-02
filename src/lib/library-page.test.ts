@@ -13,6 +13,7 @@ describe("library homepage queue", () => {
 
   it("loads the followed-show brief queue newest-first helper", () => {
     expect(source).toContain("getFollowedBriefQueue");
+    expect(source).toContain("countUnbriefedFollowedEpisodes");
     expect(source).toContain("Queue");
   });
 });

@@ -2,6 +2,7 @@ import { after, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
+import { hasXaiKey } from "@/lib/env";
 
 export const maxDuration = 300;
 
@@ -35,6 +36,7 @@ export async function POST(
       fetched: result.fetched,
       created: result.created,
       generating: result.autoBriefIds.length,
+      canGenerate: hasXaiKey(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RSS refresh failed.";

@@ -18,6 +18,7 @@ export function RefreshButton({ showId }: { showId: string }) {
         const data = (await response.json()) as {
           created?: number;
           generating?: number;
+          canGenerate?: boolean;
           error?: string;
         };
         setPending(false);
@@ -25,7 +26,13 @@ export function RefreshButton({ showId }: { showId: string }) {
           setLabel(data.error ?? "Refresh failed");
           return;
         }
-        if (data.generating) {
+        if (data.generating && !data.canGenerate) {
+          setLabel(
+            data.created
+              ? `Added ${data.created} · add XAI_API_KEY to write briefs`
+              : "New episode found · add XAI_API_KEY",
+          );
+        } else if (data.generating) {
           setLabel(data.created ? `Added ${data.created} · writing brief` : "Writing brief…");
         } else {
           setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
