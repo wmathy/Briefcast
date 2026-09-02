@@ -19,7 +19,7 @@ Open [http://localhost:3000](http://localhost:3000). Sign up with any email + pa
 
 Forgot the password for an existing account? On **Log in**, open **Forgot password** (`/forgot-password`). Enter the account email, a new password (8+), and `RECOVERY_SECRET`. If that env var is unset, the form explains recovery is not enabled yet.
 
-Without `XAI_API_KEY`, the UI still works. The library includes two real public NPR episodes with prewritten, notes-only briefs. **Generate brief + voice** tells you to add the key.
+Without `XAI_API_KEY`, the UI still works. The signed-in library queue is empty until you follow a show and a brief exists for it — there are no sample/demo cards. **Generate brief + voice** and automatic episode briefs tell you to add the key.
 
 Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATABASE_URL` at Postgres.
 
@@ -31,6 +31,7 @@ Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATAB
 | `AUTH_SECRET` | Recommended | Signs the login cookie. A long random string is fine. |
 | `RECOVERY_SECRET` | For password recovery | Shared secret for `/forgot-password`. If unset, recovery is disabled. No email is sent. |
 | `DATABASE_URL` | Local: optional. **Vercel: required** | Local default is `file:./prisma/dev.db` (SQLite via Prisma). On Vercel set a hosted **Postgres** URL (Neon or any Postgres). SQLite under `/tmp` is not shared across serverless instances, so Follow would 404 on `/shows/[id]`. |
+| `CRON_SECRET` | Vercel cron | Vercel sets this for `/api/cron/poll-episodes` (daily RSS poll of followed shows). Local calls work without it. |
 
 TTS is **Grok Voice / xAI only**. Briefcast does not use edge-tts or any other synthesizer.
 
@@ -46,7 +47,7 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 ## Deploy on Vercel
 
-This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the sample-brief seed.
+This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. A daily cron polls followed-show RSS and auto-generates briefs.
 
 1. Import [github.com/wmathy/Briefcast](https://github.com/wmathy/Briefcast) in Vercel.
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.

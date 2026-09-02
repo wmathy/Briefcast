@@ -1,7 +1,10 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { upsertShowFromItunes, syncShowEpisodes } from "@/lib/podcasts";
+import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
+import { upsertShowFromItunes } from "@/lib/podcasts";
+
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -39,7 +42,12 @@ export async function POST(request: Request) {
   });
 
   try {
-    await syncShowEpisodes(show.id, show.feedUrl);
+    const sync = await syncShowAndPickAutoBriefs(show.id, show.feedUrl);
+    if (sync.autoBriefIds.length > 0) {
+      after(async () => {
+        await generateAutoBriefs(sync.autoBriefIds);
+      });
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
     return NextResponse.json({ showId: show.id, warning: message });

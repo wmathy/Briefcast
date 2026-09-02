@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function RefreshButton({ showId }: { showId: string }) {
+export function RefreshLibraryButton() {
   const router = useRouter();
   const [label, setLabel] = useState("Check for new episodes");
   const [pending, setPending] = useState(false);
@@ -14,7 +14,7 @@ export function RefreshButton({ showId }: { showId: string }) {
       disabled={pending}
       onClick={async () => {
         setPending(true);
-        const response = await fetch(`/api/shows/${showId}/refresh`, { method: "POST" });
+        const response = await fetch("/api/queue/refresh", { method: "POST" });
         const data = (await response.json()) as {
           created?: number;
           generating?: number;
@@ -37,7 +37,9 @@ export function RefreshButton({ showId }: { showId: string }) {
         } else {
           setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
         }
-        router.refresh();
+        if (data.created) {
+          router.refresh();
+        }
       }}
       className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
     >
