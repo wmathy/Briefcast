@@ -31,7 +31,11 @@ export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string)
   return { ...sync, autoBriefIds };
 }
 
-export async function generateAutoBriefs(episodeIds: string[], limit = AUTO_BRIEF_LIMIT) {
+export async function generateAutoBriefs(
+  episodeIds: string[],
+  options?: { limit?: number; userId?: string },
+) {
+  const limit = options?.limit ?? AUTO_BRIEF_LIMIT;
   const attemptedIds = episodeIds.slice(0, limit);
   if (!hasXaiKey()) {
     return {
@@ -54,7 +58,7 @@ export async function generateAutoBriefs(episodeIds: string[], limit = AUTO_BRIE
     });
     if (!episode || episode.brief) continue;
     try {
-      await generateEpisodeBrief(id);
+      await generateEpisodeBrief(id, { userId: options?.userId });
       generated += 1;
     } catch (error) {
       errors.push(error instanceof Error ? error.message : "Generate failed.");

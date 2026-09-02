@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { generateEpisodeBrief } from "@/lib/generate";
 import { MissingXaiKeyError } from "@/lib/env";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(
   _request: Request,
@@ -16,7 +16,7 @@ export async function POST(
 
   const { id } = await context.params;
   try {
-    const result = await generateEpisodeBrief(id);
+    const result = await generateEpisodeBrief(id, { userId: user.id });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof MissingXaiKeyError) {

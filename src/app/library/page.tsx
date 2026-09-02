@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBriefDate } from "@/lib/brief";
 import { countUnbriefedFollowedEpisodes, getFollowedBriefQueue, getFollowedShows } from "@/lib/queue";
+import { formatBriefLengthLabel } from "@/lib/brief-length";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
 
 export const dynamic = "force-dynamic";
@@ -76,7 +77,7 @@ export default async function LibraryPage() {
           </div>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
-            {follows.map(({ show }) => (
+            {follows.map(({ show, briefLength }) => (
               <li key={show.id}>
                 <Link
                   href={`/shows/${show.id}`}
@@ -91,8 +92,9 @@ export default async function LibraryPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{show.title}</p>
                     <p className="truncate text-sm text-muted">{show.artist}</p>
+                    <p className="mt-1 truncate text-xs text-muted">{formatBriefLengthLabel(briefLength)}</p>
                     {show.episodes[0] ? (
-                      <p className="mt-1 truncate text-xs text-muted">Latest: {show.episodes[0].title}</p>
+                      <p className="truncate text-xs text-muted">Latest: {show.episodes[0].title}</p>
                     ) : null}
                   </div>
                 </Link>

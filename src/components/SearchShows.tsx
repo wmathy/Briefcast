@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { ItunesPodcast } from "@/lib/itunes";
+import { DEFAULT_BRIEF_LENGTH, type BriefLength } from "@/lib/brief-length";
+import { BriefLengthPicker } from "@/components/BriefLengthPicker";
 
 export function SearchShows() {
   const router = useRouter();
@@ -11,6 +13,8 @@ export function SearchShows() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [followingId, setFollowingId] = useState<string | null>(null);
+  const [defaultLength, setDefaultLength] = useState<BriefLength>(DEFAULT_BRIEF_LENGTH);
+  const [lengths, setLengths] = useState<Record<string, BriefLength>>({});
 
   async function search(event: FormEvent) {
     event.preventDefault();
@@ -32,7 +36,10 @@ export function SearchShows() {
     const response = await fetch("/api/follows", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(podcast),
+      body: JSON.stringify({
+        ...podcast,
+        briefLength: lengths[podcast.itunesId] ?? defaultLength,
+      }),
     });
     const data = (await response.json()) as { showId?: string; error?: string; warning?: string };
     setFollowingId(null);
@@ -62,34 +69,54 @@ export function SearchShows() {
         </button>
       </form>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
+      <div className="space-y-2 rounded-2xl border border-line bg-bg-card p-4">
+        <p className="text-xs uppercase tracking-[0.18em] text-muted">New follow length</p>
+        <BriefLengthPicker value={defaultLength} onChange={setDefaultLength} name="discover-default-length" />
+        <p className="text-sm text-muted">
+          Each show can use a different length. You can change it later on the show page. Existing
+          briefs rewrite only when you Generate again.
+        </p>
+      </div>
       <ul className="space-y-3">
         {results.map((podcast) => (
           <li
             key={podcast.itunesId}
-            className="flex items-center gap-3 rounded-2xl border border-line bg-bg-card p-3"
+            className="flex flex-col gap-3 rounded-2xl border border-line bg-bg-card p-3 sm:flex-row sm:items-center"
           >
-            {podcast.artworkUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={podcast.artworkUrl}
-                alt=""
-                className="h-16 w-16 rounded-xl object-cover"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded-xl bg-bg" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{podcast.title}</p>
-              <p className="truncate text-sm text-muted">{podcast.artist}</p>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {podcast.artworkUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={podcast.artworkUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="h-16 w-16 rounded-xl bg-bg" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{podcast.title}</p>
+                <p className="truncate text-sm text-muted">{podcast.artist}</p>
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={followingId === podcast.itunesId}
-              onClick={() => follow(podcast)}
-              className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
-            >
-              {followingId === podcast.itunesId ? "Following…" : "Follow"}
-            </button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <BriefLengthPicker
+                value={lengths[podcast.itunesId] ?? defaultLength}
+                onChange={(value) =>
+                  setLengths((current) => ({ ...current, [podcast.itunesId]: value }))
+                }
+                disabled={followingId === podcast.itunesId}
+                name={`follow-length-${podcast.itunesId}`}
+              />
+              <button
+                type="button"
+                disabled={followingId === podcast.itunesId}
+                onClick={() => follow(podcast)}
+                className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
+              >
+                {followingId === podcast.itunesId ? "Following…" : "Follow"}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

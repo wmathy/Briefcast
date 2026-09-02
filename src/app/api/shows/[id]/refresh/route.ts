@@ -29,7 +29,7 @@ export async function POST(
     const result = await syncShowAndPickAutoBriefs(follow.show.id, follow.show.feedUrl);
     if (result.autoBriefIds.length > 0) {
       after(async () => {
-        await generateAutoBriefs(result.autoBriefIds);
+        await generateAutoBriefs(result.autoBriefIds, { userId: user.id });
       });
     }
     return NextResponse.json({

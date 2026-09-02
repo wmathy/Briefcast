@@ -9,7 +9,8 @@ export default async function DiscoverPage() {
       <div>
         <h1 className="font-display text-4xl">Discover</h1>
         <p className="mt-2 text-muted">
-          Search the iTunes catalog and follow your own shows. Briefcast does not ship a hardcoded show list.
+          Search the iTunes catalog and follow your own shows. Pick Short, Medium, or Long per show.
+          Briefcast does not ship a hardcoded show list.
         </p>
       </div>
       <SearchShows />

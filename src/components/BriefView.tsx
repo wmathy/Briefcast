@@ -1,5 +1,6 @@
 import type { BriefSegment } from "@/lib/brief";
 import { formatBriefDate } from "@/lib/brief";
+import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
 
 export function BriefView({
   showTitle,
@@ -12,6 +13,8 @@ export function BriefView({
   takeaways,
   sourceType,
   confidenceNote,
+  briefLength,
+  sourceLimited,
 }: {
   showTitle: string;
   episodeTitle: string;
@@ -23,6 +26,8 @@ export function BriefView({
   takeaways: string[];
   sourceType: string;
   confidenceNote: string | null;
+  briefLength?: BriefLength | string | null;
+  sourceLimited?: boolean;
 }) {
   return (
     <article className="space-y-8">
@@ -31,6 +36,7 @@ export function BriefView({
         <h1 className="font-display text-3xl leading-tight text-ink sm:text-4xl">{episodeTitle}</h1>
         <p className="text-sm text-muted">
           {guest ? `Guest: ${guest}` : "Guest: not named in source"} · {formatBriefDate(publishedAt)}
+          {briefLength ? ` · ${formatBriefLengthLabel(briefLength)}` : ""}
         </p>
         {link ? (
           <a className="text-sm text-accent underline-offset-2 hover:underline" href={link} target="_blank" rel="noreferrer">
@@ -38,6 +44,13 @@ export function BriefView({
           </a>
         ) : null}
       </header>
+
+      {sourceLimited ? (
+        <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
+          Source was limited for this length. The brief stays faithful to the available transcript
+          or notes and does not invent extra material.
+        </p>
+      ) : null}
 
       <section>
         <h2 className="mb-2 text-xs uppercase tracking-[0.18em] text-muted">Overview</h2>

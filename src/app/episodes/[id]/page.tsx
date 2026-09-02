@@ -7,6 +7,7 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { GenerateButton } from "@/components/GenerateButton";
 import { hasXaiKey } from "@/lib/env";
 import type { BriefSegment } from "@/lib/brief";
+import { formatBriefLengthLabel, parseBriefLength } from "@/lib/brief-length";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -18,6 +19,17 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
   });
   if (!episode) notFound();
   if (!user && !episode.seeded) redirect("/login");
+
+  const follow = user
+    ? await prisma.follow.findUnique({
+        where: { userId_showId: { userId: user.id, showId: episode.showId } },
+      })
+    : null;
+  const followLength = follow ? parseBriefLength(follow.briefLength) : null;
+  const briefLength = episode.brief ? parseBriefLength(episode.brief.briefLength) : followLength;
+  const lengthChanged = Boolean(
+    followLength && episode.brief && followLength !== parseBriefLength(episode.brief.briefLength),
+  );
 
   const segments = episode.brief
     ? (JSON.parse(episode.brief.segmentsJson) as BriefSegment[])
@@ -42,6 +54,8 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           takeaways={takeaways}
           sourceType={episode.brief.sourceType}
           confidenceNote={episode.brief.confidenceNote}
+          briefLength={episode.brief.briefLength}
+          sourceLimited={episode.brief.sourceLimited}
         />
       ) : (
         <div className="space-y-3">
@@ -49,6 +63,13 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           <p className="text-muted">No brief yet. Generate one from the transcript or official show notes.</p>
         </div>
       )}
+
+      {lengthChanged ? (
+        <p className="rounded-2xl border border-line bg-bg-card px-4 py-3 text-sm text-muted">
+          This follow is now {formatBriefLengthLabel(followLength)}. Generate again to rewrite the
+          brief and spoken recap. Changing length does not regenerate automatically.
+        </p>
+      ) : null}
 
       {episode.recapAudio ? (
         <AudioPlayer
@@ -61,7 +82,11 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      <GenerateButton episodeId={episode.id} hasXaiKey={hasXaiKey()} />
+      <GenerateButton
+        episodeId={episode.id}
+        hasXaiKey={hasXaiKey()}
+        briefLength={briefLength ?? undefined}
+      />
     </div>
   );
 }

@@ -2,8 +2,17 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
 
-export function GenerateButton({ episodeId, hasXaiKey }: { episodeId: string; hasXaiKey: boolean }) {
+export function GenerateButton({
+  episodeId,
+  hasXaiKey,
+  briefLength,
+}: {
+  episodeId: string;
+  hasXaiKey: boolean;
+  briefLength?: BriefLength;
+}) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(
     hasXaiKey ? null : "Add XAI_API_KEY to generate written briefs and spoken recaps.",
@@ -29,8 +38,17 @@ export function GenerateButton({ episodeId, hasXaiKey }: { episodeId: string; ha
         }}
         className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
       >
-        {pending ? "Generating…" : "Generate brief + voice"}
+        {pending
+          ? "Generating…"
+          : briefLength
+            ? `Generate ${formatBriefLengthLabel(briefLength)}`
+            : "Generate brief + voice"}
       </button>
+      {briefLength ? (
+        <p className="text-xs text-muted">
+          Spoken length is measured at 1x. The player can still default to 1.2× playback.
+        </p>
+      ) : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );

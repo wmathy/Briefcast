@@ -16,7 +16,7 @@ export async function POST() {
     const poll = await pollFollowedShowsAndGenerate({ userId: user.id });
     if (poll.autoBriefIds.length > 0) {
       after(async () => {
-        await generateAutoBriefs(poll.autoBriefIds);
+        await generateAutoBriefs(poll.autoBriefIds, { userId: user.id });
       });
     }
     return NextResponse.json({

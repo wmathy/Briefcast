@@ -1,4 +1,5 @@
 import { XAI_API_BASE, XAI_CHAT_MODELS, requireXaiKey } from "@/lib/env";
+import { XAI_TTS_MAX_CHARS, concatMp3, splitTextForTts } from "@/lib/tts";
 
 export async function xaiChatJson(prompt: string): Promise<string> {
   const key = requireXaiKey();
@@ -43,9 +44,14 @@ export async function xaiChatJson(prompt: string): Promise<string> {
   throw new Error(lastError);
 }
 
-export async function xaiTtsMp3(text: string, speed: number): Promise<Buffer> {
+async function xaiTtsMp3Chunk(text: string, speed: number): Promise<Buffer> {
+  if (text.length > XAI_TTS_MAX_CHARS) {
+    throw new Error(
+      `xAI TTS chunk is ${text.length} characters; the unary API cap is ${XAI_TTS_MAX_CHARS}.`,
+    );
+  }
+
   const key = requireXaiKey();
-  const clipped = text.slice(0, 15000);
   const response = await fetch(`${XAI_API_BASE}/tts`, {
     method: "POST",
     headers: {
@@ -53,7 +59,7 @@ export async function xaiTtsMp3(text: string, speed: number): Promise<Buffer> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      text: clipped,
+      text,
       voice_id: "eve",
       language: "en",
       speed,
@@ -71,4 +77,17 @@ export async function xaiTtsMp3(text: string, speed: number): Promise<Buffer> {
   }
 
   return Buffer.from(await response.arrayBuffer());
+}
+
+export async function xaiTtsMp3(text: string, speed: number): Promise<Buffer> {
+  const chunks = splitTextForTts(text);
+  if (chunks.length === 0) {
+    throw new Error("Spoken recap is empty; nothing to synthesize.");
+  }
+
+  const parts: Buffer[] = [];
+  for (const chunk of chunks) {
+    parts.push(await xaiTtsMp3Chunk(chunk, speed));
+  }
+  return concatMp3(parts);
 }

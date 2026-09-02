@@ -2,7 +2,7 @@
 
 Friends follow their own podcasts and get a written episode brief plus a spoken recap.
 
-Search iTunes, follow the shows you already listen to, then open a source-grounded brief and play a Grok Voice recap in the app. There is no hardcoded show list, no email, and no checkout.
+Search iTunes, follow the shows you already listen to, pick Short / Medium / Long per show, then open a source-grounded brief and play a Grok Voice recap in the app. There is no hardcoded show list, no email, and no checkout.
 
 See [PRODUCT.md](./PRODUCT.md) for MVP vs later (email notifications).
 
@@ -27,7 +27,7 @@ Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATAB
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `XAI_API_KEY` | For generate | xAI chat completions write the brief; xAI TTS (`eve`, speed 1.2) speaks it. [console.x.ai](https://console.x.ai/) |
+| `XAI_API_KEY` | For generate | xAI chat completions write the brief; xAI TTS (`eve`, speed 1.0) speaks it so Short/Medium/Long match 1x duration. The player can still default to 1.2×. [console.x.ai](https://console.x.ai/) |
 | `AUTH_SECRET` | Recommended | Signs the login cookie. A long random string is fine. |
 | `RECOVERY_SECRET` | For password recovery | Shared secret for `/forgot-password`. If unset, recovery is disabled. No email is sent. |
 | `DATABASE_URL` | Local: optional. **Vercel: required** | Local default is `file:./prisma/dev.db` (SQLite via Prisma). On Vercel set a hosted **Postgres** URL (Neon or any Postgres). SQLite under `/tmp` is not shared across serverless instances, so Follow would 404 on `/shows/[id]`. |
@@ -39,7 +39,7 @@ TTS is **Grok Voice / xAI only**. Briefcast does not use edge-tts or any other s
 curl -X POST https://api.x.ai/v1/tts \
   -H "Authorization: Bearer $XAI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"text":"Hello from Briefcast.","voice_id":"eve","language":"en","speed":1.2}' \
+  -d '{"text":"Hello from Briefcast.","voice_id":"eve","language":"en","speed":1.0}' \
   --output recap.mp3
 ```
 

@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
 import { upsertShowFromItunes } from "@/lib/podcasts";
+import { parseBriefLength } from "@/lib/brief-length";
 
 export const maxDuration = 300;
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     feedUrl?: string;
     artworkUrl?: string | null;
     description?: string;
+    briefLength?: string;
   };
 
   if (!body.itunesId || !body.title || !body.feedUrl) {
@@ -34,24 +36,25 @@ export async function POST(request: Request) {
     description: body.description ?? "",
   });
 
+  const briefLength = parseBriefLength(body.briefLength);
   const prisma = getPrisma();
   await prisma.follow.upsert({
     where: { userId_showId: { userId: user.id, showId: show.id } },
-    update: {},
-    create: { userId: user.id, showId: show.id },
+    update: { briefLength },
+    create: { userId: user.id, showId: show.id, briefLength },
   });
 
   try {
     const sync = await syncShowAndPickAutoBriefs(show.id, show.feedUrl);
     if (sync.autoBriefIds.length > 0) {
       after(async () => {
-        await generateAutoBriefs(sync.autoBriefIds);
+        await generateAutoBriefs(sync.autoBriefIds, { userId: user.id });
       });
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
-    return NextResponse.json({ showId: show.id, warning: message });
+    return NextResponse.json({ showId: show.id, briefLength, warning: message });
   }
 
-  return NextResponse.json({ showId: show.id });
+  return NextResponse.json({ showId: show.id, briefLength });
 }

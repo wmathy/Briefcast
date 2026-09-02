@@ -1,11 +1,41 @@
 import { getPrisma } from "@/lib/db";
 import { loadEpisodeSource } from "@/lib/sources";
-import { writeBriefFromSource } from "@/lib/brief";
+import { mergeConfidenceNote, writeBriefFromSource } from "@/lib/brief";
 import { xaiTtsMp3 } from "@/lib/xai";
 import { TTS_SPEED, hasXaiKey, MissingXaiKeyError } from "@/lib/env";
 import { fetchRssEpisodes } from "@/lib/rss";
+import {
+  countWords,
+  parseBriefLength,
+  resolveBriefLength,
+  type BriefLength,
+} from "@/lib/brief-length";
 
-export async function generateEpisodeBrief(episodeId: string) {
+export async function resolveEpisodeBriefLength(
+  showId: string,
+  userId?: string,
+): Promise<BriefLength> {
+  const prisma = getPrisma();
+  const userFollow = userId
+    ? await prisma.follow.findUnique({
+        where: { userId_showId: { userId, showId } },
+        select: { briefLength: true },
+      })
+    : null;
+  const follows = await prisma.follow.findMany({
+    where: { showId },
+    select: { briefLength: true },
+  });
+  return resolveBriefLength({
+    userFollowLength: userFollow?.briefLength,
+    followerLengths: follows.map((follow) => parseBriefLength(follow.briefLength)),
+  });
+}
+
+export async function generateEpisodeBrief(
+  episodeId: string,
+  options?: { userId?: string; briefLength?: BriefLength },
+) {
   if (!hasXaiKey()) {
     throw new MissingXaiKeyError();
   }
@@ -18,6 +48,9 @@ export async function generateEpisodeBrief(episodeId: string) {
   if (!episode) {
     throw new Error("Episode not found.");
   }
+
+  const briefLength =
+    options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
 
   let transcriptUrl: string | null = null;
   try {
@@ -42,10 +75,12 @@ export async function generateEpisodeBrief(episodeId: string) {
     episodeLink: episode.link,
     knownGuest: episode.guest,
     source,
+    briefLength,
   });
 
   const guest = brief.guest ?? episode.guest;
   const spoken = brief.spokenRecap.trim();
+  const confidenceNote = mergeConfidenceNote(source.confidenceNote, brief.briefLength, brief.sourceLimited);
   const audio = await xaiTtsMp3(spoken, TTS_SPEED);
 
   await prisma.$transaction([
@@ -57,8 +92,10 @@ export async function generateEpisodeBrief(episodeId: string) {
         takeawaysJson: JSON.stringify(brief.takeaways),
         spokenRecap: spoken,
         sourceType: source.sourceType,
-        confidenceNote: source.confidenceNote,
+        confidenceNote,
         guest,
+        briefLength: brief.briefLength,
+        sourceLimited: brief.sourceLimited,
       },
       create: {
         episodeId: episode.id,
@@ -67,8 +104,10 @@ export async function generateEpisodeBrief(episodeId: string) {
         takeawaysJson: JSON.stringify(brief.takeaways),
         spokenRecap: spoken,
         sourceType: source.sourceType,
-        confidenceNote: source.confidenceNote,
+        confidenceNote,
         guest,
+        briefLength: brief.briefLength,
+        sourceLimited: brief.sourceLimited,
       },
     }),
     prisma.recapAudio.upsert({
@@ -82,5 +121,11 @@ export async function generateEpisodeBrief(episodeId: string) {
     }),
   ]);
 
-  return { episodeId: episode.id, sourceType: source.sourceType };
+  return {
+    episodeId: episode.id,
+    sourceType: source.sourceType,
+    briefLength: brief.briefLength,
+    sourceLimited: brief.sourceLimited,
+    spokenWords: countWords(spoken),
+  };
 }

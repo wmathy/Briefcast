@@ -17,7 +17,7 @@ export function AudioPlayer({ src, title }: { src: string; title: string }) {
   return (
     <div className="rounded-2xl border border-line bg-bg-raised p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted">Spoken recap · Eve · default {DEFAULT_PLAYBACK_RATE}x</p>
+        <p className="text-sm text-muted">Spoken recap · Eve · listen at {DEFAULT_PLAYBACK_RATE}x (length is at 1x)</p>
         <div className="flex gap-1">
           {RATES.map((value) => (
             <button

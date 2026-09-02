@@ -16,4 +16,10 @@ describe("library homepage queue", () => {
     expect(source).toContain("countUnbriefedFollowedEpisodes");
     expect(source).toContain("Queue");
   });
+
+  it("shows each follow's brief length", () => {
+    expect(source).toContain("formatBriefLengthLabel");
+    expect(source).toContain("briefLength");
+  });
 });
+

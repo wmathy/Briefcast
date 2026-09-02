@@ -30,11 +30,12 @@ model Show {
 }
 
 model Follow {
-  userId    String
-  showId    String
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  userId      String
+  showId      String
+  briefLength String   @default("medium")
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  show        Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
 
   @@id([userId, showId])
 }
@@ -68,6 +69,8 @@ model Brief {
   sourceType     String
   confidenceNote String?
   guest          String?
+  briefLength    String   @default("medium")
+  sourceLimited  Boolean  @default(false)
   createdAt      DateTime @default(now())
   episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 }

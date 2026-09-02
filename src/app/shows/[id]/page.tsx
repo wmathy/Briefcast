@@ -5,6 +5,8 @@ import { getPrisma } from "@/lib/db";
 import { formatBriefDate } from "@/lib/brief";
 import { RefreshButton } from "@/components/RefreshButton";
 import { UnfollowButton } from "@/components/UnfollowButton";
+import { ShowBriefLengthControl } from "@/components/ShowBriefLengthControl";
+import { parseBriefLength } from "@/lib/brief-length";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +48,12 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
         <p className="text-sm text-muted">
           You are not following this show. Search it from Discover if you want new episodes synced for you.
         </p>
-      ) : null}
+      ) : (
+        <ShowBriefLengthControl
+          showId={show.id}
+          initialLength={parseBriefLength(show.follows[0]?.briefLength)}
+        />
+      )}
 
       <ul className="space-y-3">
         {show.episodes.map((episode) => (
