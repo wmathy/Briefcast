@@ -26,10 +26,9 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
       })
     : null;
   const followLength = follow ? parseBriefLength(follow.briefLength) : null;
-  const briefLength = episode.brief ? parseBriefLength(episode.brief.briefLength) : followLength;
-  const lengthChanged = Boolean(
-    followLength && episode.brief && followLength !== parseBriefLength(episode.brief.briefLength),
-  );
+  const storedBriefLength = episode.brief ? parseBriefLength(episode.brief.briefLength) : null;
+  const nextLength = followLength ?? storedBriefLength;
+  const lengthChanged = Boolean(followLength && storedBriefLength && followLength !== storedBriefLength);
 
   const segments = episode.brief
     ? (JSON.parse(episode.brief.segmentsJson) as BriefSegment[])
@@ -64,7 +63,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         </div>
       )}
 
-      {lengthChanged ? (
+      {lengthChanged && followLength ? (
         <p className="rounded-2xl border border-line bg-bg-card px-4 py-3 text-sm text-muted">
           This follow is now {formatBriefLengthLabel(followLength)}. Generate again to rewrite the
           brief and spoken recap. Changing length does not regenerate automatically.
@@ -85,7 +84,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
       <GenerateButton
         episodeId={episode.id}
         hasXaiKey={hasXaiKey()}
-        briefLength={briefLength ?? undefined}
+        briefLength={nextLength ?? undefined}
       />
     </div>
   );
