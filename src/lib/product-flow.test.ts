@@ -71,6 +71,8 @@ describe("briefs come from the full episode transcript", () => {
     expect(read("./brief.ts")).toContain("briefPromptSource(input.source.text)");
     expect(read("./auto-brief.ts")).toContain("stillNeeded");
     expect(read("../components/AutoGenerateLatest.tsx")).toContain("refreshShouldContinue");
+    expect(read("./xai.ts")).toContain("voice_id: voiceId");
+    expect(read("./xai.ts")).not.toContain('voice_id: "eve"');
   });
 });
 

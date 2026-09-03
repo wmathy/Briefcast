@@ -33,6 +33,7 @@ model Follow {
   userId      String
   showId      String
   briefLength String   @default("medium")
+  ttsVoice    String   @default("eve")
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   show        Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
@@ -84,6 +85,7 @@ model RecapAudio {
   mimeType         String   @default("audio/mpeg")
   data             Bytes
   durationSeconds  Int?
+  voiceId          String   @default("eve")
   createdAt        DateTime @default(now())
   episode          Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 }

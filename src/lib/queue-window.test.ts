@@ -52,6 +52,37 @@ describe("recapNeedsRewrite", () => {
     ).toBe(false);
   });
 
+  it("re-queues audio when the follow voice no longer matches the stored recap", () => {
+    expect(
+      recapNeedsRewrite(
+        {
+          brief: {
+            sourceType: "transcript",
+            spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+            briefLength: "medium",
+            sourceLimited: false,
+          },
+          recapAudio: { durationSeconds: 10 * 60, voiceId: "eve" },
+        },
+        "ara",
+      ),
+    ).toBe(true);
+    expect(
+      recapNeedsRewrite(
+        {
+          brief: {
+            sourceType: "transcript",
+            spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+            briefLength: "medium",
+            sourceLimited: false,
+          },
+          recapAudio: { durationSeconds: 10 * 60, voiceId: "ara" },
+        },
+        "ara",
+      ),
+    ).toBe(false);
+  });
+
   it("rewrites a published brief whose spoken recap is far below the band", () => {
     expect(
       recapNeedsRewrite({

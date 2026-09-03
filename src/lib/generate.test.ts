@@ -113,6 +113,22 @@ describe("planBriefGeneration", () => {
     ).toBe("unavailable");
   });
 
+  it("re-runs TTS only when the follow voice changes", () => {
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        spokenRecap: words(1500),
+        storedLength: "medium",
+        sourceLimited: false,
+        audioSeconds: 10 * 60,
+        requestedLength: "medium",
+        storedVoice: "eve",
+        requestedVoice: "ara",
+      }),
+    ).toBe("tts-only");
+  });
+
   it("skips work when spoken words and measured audio are both in band", () => {
     expect(
       planBriefGeneration({

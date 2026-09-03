@@ -21,6 +21,24 @@ import {
 import { mp3PlaybackDurationSeconds } from "@/lib/tts";
 import { TranscriptInProgressError } from "@/lib/stt-job";
 import { recapNeedsRewrite } from "@/lib/queue";
+import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
+
+export async function resolveEpisodeTtsVoice(showId: string, userId?: string): Promise<string> {
+  const prisma = getPrisma();
+  if (userId) {
+    const follow = await prisma.follow.findUnique({
+      where: { userId_showId: { userId, showId } },
+      select: { ttsVoice: true },
+    });
+    if (follow) return parseTtsVoice(follow.ttsVoice);
+  }
+  const follow = await prisma.follow.findFirst({
+    where: { showId },
+    select: { ttsVoice: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return parseTtsVoice(follow?.ttsVoice);
+}
 
 export async function resolveEpisodeBriefLength(
   showId: string,
@@ -76,7 +94,11 @@ export function canReuseRecapAudio(input: {
   audioSeconds?: number | null;
   sourceLimited?: boolean | null;
   requestedLength: BriefLength;
+  storedVoice?: string | null;
+  requestedVoice?: string | null;
 }): boolean {
+  const requestedVoice = parseTtsVoice(input.requestedVoice ?? DEFAULT_TTS_VOICE);
+  if (parseTtsVoice(input.storedVoice ?? DEFAULT_TTS_VOICE) !== requestedVoice) return false;
   const seconds = input.audioSeconds;
   if (!seconds || seconds <= 0) return false;
   if (input.sourceLimited) return true;
@@ -91,6 +113,8 @@ export function planBriefGeneration(input: {
   sourceLimited?: boolean | null;
   audioSeconds?: number | null;
   requestedLength: BriefLength;
+  storedVoice?: string | null;
+  requestedVoice?: string | null;
 }): "already-published" | "tts-only" | "write-then-tts" | "keep-existing" | "unavailable" {
   const reuseWritten = canReuseWrittenBrief(input);
   const reuseAudio = canReuseRecapAudio(input);
@@ -169,6 +193,7 @@ export async function generateEpisodeBrief(
 
   const briefLength =
     options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
+  const ttsVoice = await resolveEpisodeTtsVoice(episode.showId, options?.userId);
 
   const reusePlan = planBriefGeneration({
     hasCompleteTranscript: false,
@@ -178,6 +203,8 @@ export async function generateEpisodeBrief(
     sourceLimited: episode.brief?.sourceLimited,
     audioSeconds: episode.recapAudio?.durationSeconds,
     requestedLength: briefLength,
+    storedVoice: episode.recapAudio?.voiceId,
+    requestedVoice: ttsVoice,
   });
 
   if (reusePlan === "already-published") {
@@ -202,6 +229,7 @@ export async function generateEpisodeBrief(
       briefLength: parseBriefLength(episode.brief.briefLength ?? briefLength),
       sourceLimited: episode.brief.sourceLimited,
       sourceType: "transcript",
+      voiceId: ttsVoice,
     });
   }
 
@@ -368,9 +396,11 @@ async function persistRecapAudioAfterTts(input: {
   briefLength: BriefLength;
   sourceLimited: boolean;
   sourceType: "transcript";
+  voiceId: string;
 }) {
   const prisma = getPrisma();
-  const audio = await xaiTtsMp3(input.spoken, TTS_SPEED);
+  const voiceId = parseTtsVoice(input.voiceId);
+  const audio = await xaiTtsMp3(input.spoken, TTS_SPEED, voiceId);
   const audioSeconds = mp3PlaybackDurationSeconds(audio);
   try {
     assertRecapInBand({
@@ -393,12 +423,14 @@ async function persistRecapAudioAfterTts(input: {
       mimeType: "audio/mpeg",
       data: new Uint8Array(audio),
       durationSeconds: Math.round(audioSeconds),
+      voiceId,
     },
     create: {
       episodeId: input.episodeId,
       mimeType: "audio/mpeg",
       data: new Uint8Array(audio),
       durationSeconds: Math.round(audioSeconds),
+      voiceId,
     },
   });
 

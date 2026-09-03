@@ -7,6 +7,7 @@ import { RefreshButton } from "@/components/RefreshButton";
 import { UnfollowButton } from "@/components/UnfollowButton";
 import { ShowBriefLengthControl } from "@/components/ShowBriefLengthControl";
 import { parseBriefLength } from "@/lib/brief-length";
+import { DEFAULT_TTS_VOICE, listTtsVoices, parseTtsVoice } from "@/lib/tts-voice";
 import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
   if (!show) notFound();
 
   const following = show.follows.length > 0;
+  const voices = following ? await listTtsVoices() : [];
 
   return (
     <div className="space-y-6">
@@ -49,6 +51,8 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
         <ShowBriefLengthControl
           showId={show.id}
           initialLength={parseBriefLength(show.follows[0]?.briefLength)}
+          initialVoice={parseTtsVoice(show.follows[0]?.ttsVoice ?? DEFAULT_TTS_VOICE)}
+          voices={voices}
         />
       ) : null}
 
