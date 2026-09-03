@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_BRIEF_LIMIT,
+  AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
   takeAutoBriefBatch,
@@ -24,6 +25,7 @@ describe("takeAutoBriefBatch", () => {
     expect(batch.toGenerate).toEqual(["a", "b", "c"]);
     expect(batch.remaining).toBe(2);
     expect(AUTO_BRIEF_LIMIT).toBe(1);
+    expect(AUTO_BRIEF_LOOKAHEAD).toBe(8);
   });
 
   it("dedupes and ignores empty ids", () => {

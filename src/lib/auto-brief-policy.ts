@@ -1,5 +1,6 @@
-/** Max briefs one request writes so we stay inside function time. Extra shows stay queued. */
+/** Max heavy STT/TTS jobs one request runs. Locked episodes are skipped first. */
 export const AUTO_BRIEF_LIMIT = 1;
+export const AUTO_BRIEF_LOOKAHEAD = 8;
 
 export function episodeNeedsSpokenBrief(episode: {
   brief?: { sourceType?: string | null } | null;

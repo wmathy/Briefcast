@@ -4,6 +4,7 @@ import { generateEpisodeBrief, purgeNotesOnlyBriefs } from "@/lib/generate";
 import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import {
   AUTO_BRIEF_LIMIT,
+  AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
   takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
@@ -12,6 +13,7 @@ import { syncShowEpisodes } from "@/lib/podcasts";
 
 export {
   AUTO_BRIEF_LIMIT,
+  AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
   takeAutoBriefBatch,
@@ -66,19 +68,26 @@ export async function generateAutoBriefs(
     }
     try {
       const result = await generateEpisodeBrief(id, { userId: options?.userId, force: recapNeedsRewrite(episode) });
+      if (result.reason === "transcript-in-progress" && "sttBusy" in result && result.sttBusy) {
+        inProgress += 1;
+        progressReason = "transcript-in-progress";
+        continue;
+      }
       if (result.reason === "transcript-in-progress" || result.reason === "audio-pending") {
         inProgress += 1;
         progressReason = result.reason;
-        continue;
+        break;
       }
       if (result.published) {
         generated += 1;
-      } else {
-        skipped += 1;
-        if (result.reason === "no-full-transcript") {
-          errors.push(`${episode.show.title}: ${FULL_TRANSCRIPT_UNAVAILABLE}`);
-        }
+        break;
       }
+      skipped += 1;
+      if (result.reason === "no-full-transcript") {
+        errors.push(`${episode.show.title}: ${FULL_TRANSCRIPT_UNAVAILABLE}`);
+        continue;
+      }
+      break;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Generate failed.";
       errors.push(`${episode.show.title}: ${message}`);
@@ -153,7 +162,7 @@ export async function refreshFollowedBriefs(options?: {
 }) {
   await purgeNotesOnlyBriefs();
   const poll = await collectFollowedAutoBriefIds(options);
-  const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LIMIT);
+  const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LOOKAHEAD);
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
   // Recount after this turn so a persisted draft whose TTS timed out stays queued.
   const stillNeeded = await collectWindowedAutoBriefIds({

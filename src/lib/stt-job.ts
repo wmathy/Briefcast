@@ -3,7 +3,7 @@ import { STT_CHUNK_BYTES } from "@/lib/audio-chunks";
 import { fetchAudioSlice, sttBufferChunk, xaiSttFromAudioUrl, type SttResult } from "@/lib/xai";
 
 export const STT_CHUNKS_PER_TURN = 1;
-const LOCK_STALE_MS = 4 * 60 * 1000;
+const LOCK_STALE_MS = 6 * 60 * 1000;
 
 export class TranscriptInProgressError extends Error {
   constructor(
@@ -12,6 +12,7 @@ export class TranscriptInProgressError extends Error {
       nextByte: number;
       totalBytes: number | null;
       coveredSeconds: number;
+      busy?: boolean;
     },
   ) {
     super("transcript-in-progress");
@@ -65,6 +66,7 @@ export async function transcribeEpisodeDurable(input: {
       nextByte: job.nextByte,
       totalBytes: job.totalBytes,
       coveredSeconds: job.coveredSeconds,
+      busy: true,
     });
   }
 

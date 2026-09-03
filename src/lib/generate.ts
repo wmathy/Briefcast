@@ -237,6 +237,7 @@ export async function generateEpisodeBrief(
         briefLength,
         sourceLimited: false,
         spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
+        sttBusy: Boolean(error.progress.busy),
         sttChunks: error.progress.chunks,
         sttBytes: error.progress.nextByte,
         sttTotalBytes: error.progress.totalBytes,
