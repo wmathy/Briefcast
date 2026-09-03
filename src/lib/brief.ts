@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { xaiChatJson } from "@/lib/xai";
 import type { EpisodeSource } from "@/lib/sources";
+import { briefPromptSource } from "@/lib/sources";
 import {
   BRIEF_LENGTH_SPECS,
   DEFAULT_BRIEF_LENGTH,
@@ -103,7 +104,7 @@ Requested length: ${spec.label} (${spec.durationLabel})
 ${input.source.confidenceNote ?? ""}
 
 SOURCE TEXT:
-${input.source.text}
+${briefPromptSource(input.source.text)}
 
 Return JSON:
 {

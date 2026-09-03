@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { shouldPublishBrief } from "./generate";
+import { canReuseWrittenBrief, planBriefGeneration, shouldPublishBrief } from "./generate";
+
+function words(count: number): string {
+  return Array.from({ length: count }, (_, index) => `word${index}`).join(" ");
+}
 
 describe("shouldPublishBrief", () => {
   it("never publishes when there is no complete transcript", () => {
@@ -54,5 +58,72 @@ describe("shouldPublishBrief", () => {
         force: false,
       }),
     ).toBe("keep-existing");
+  });
+});
+
+describe("planBriefGeneration", () => {
+  it("synthesizes audio only when a transcript brief is already in the word band", () => {
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        spokenRecap: words(1500),
+        storedLength: "medium",
+        sourceLimited: false,
+        audioSeconds: null,
+        requestedLength: "medium",
+      }),
+    ).toBe("tts-only");
+  });
+
+  it("does not reuse a 1:38 Medium recap — rewrite the spoken brief", () => {
+    expect(
+      canReuseWrittenBrief({
+        existingSourceType: "transcript",
+        spokenRecap: "Joe and Jesse open with a UFO clip.",
+        storedLength: "medium",
+        sourceLimited: false,
+        requestedLength: "medium",
+      }),
+    ).toBe(false);
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        spokenRecap: "Joe and Jesse open with a UFO clip.",
+        storedLength: "medium",
+        sourceLimited: false,
+        audioSeconds: 98,
+        requestedLength: "medium",
+      }),
+    ).toBe("write-then-tts");
+  });
+
+  it("never plans a notes-only publish", () => {
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: false,
+        existingSourceType: "shownotes",
+        spokenRecap: words(200),
+        storedLength: "medium",
+        sourceLimited: true,
+        audioSeconds: 90,
+        requestedLength: "medium",
+      }),
+    ).toBe("unavailable");
+  });
+
+  it("skips work when spoken words and measured audio are both in band", () => {
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        spokenRecap: words(1500),
+        storedLength: "medium",
+        sourceLimited: false,
+        audioSeconds: 10 * 60,
+        requestedLength: "medium",
+      }),
+    ).toBe("already-published");
   });
 });

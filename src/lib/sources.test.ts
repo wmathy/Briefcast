@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { loadEpisodeSource } from "./sources";
+import { briefPromptSource, loadEpisodeSource } from "./sources";
 
 const originalFetch = globalThis.fetch;
 const originalKey = process.env.XAI_API_KEY;
@@ -252,6 +252,18 @@ describe("loadEpisodeSource", () => {
     expect(source.confidenceNote).toBeNull();
     expect(source.text).toContain("stockpiles");
     expect(calls.some((url) => url.includes("api.x.ai/v1/stt"))).toBe(true);
+  });
+
+  it("slices a long transcript for the LLM prompt but keeps start, middle, and end", () => {
+    const text = `START-${"a".repeat(50_000)}-MID-${"b".repeat(50_000)}-END-${"c".repeat(50_000)}`;
+    const sliced = briefPromptSource(text, 90_000);
+    expect(sliced.length).toBeLessThan(text.length);
+    expect(sliced.length).toBeLessThanOrEqual(90_000 + 80);
+    expect(sliced.startsWith("START-")).toBe(true);
+    expect(sliced).toContain("[... middle of episode ...]");
+    expect(sliced).toContain("[... later in episode ...]");
+    expect(sliced.includes("END-") || sliced.endsWith("c".repeat(20))).toBe(true);
+    expect(sliced).toContain("c".repeat(100));
   });
 
   it("keeps a long official transcript instead of truncating at the old 80k cap", async () => {

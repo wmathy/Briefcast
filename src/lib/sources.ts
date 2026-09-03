@@ -36,6 +36,22 @@ function trimSource(text: string): string {
   return `${text.slice(0, MAX_SOURCE_CHARS)}\n\n[Source truncated for length.]`;
 }
 
+/** Keep start, middle, and end so the model can cover a 3-hour episode inside one request. */
+export function briefPromptSource(text: string, max = 90_000): string {
+  if (text.length <= max) return text;
+  const head = Math.floor(max * 0.4);
+  const mid = Math.floor(max * 0.3);
+  const tail = max - head - mid;
+  const midStart = Math.max(head, Math.floor((text.length - mid) / 2));
+  return [
+    text.slice(0, head),
+    "\n\n[... middle of episode ...]\n\n",
+    text.slice(midStart, midStart + mid),
+    "\n\n[... later in episode ...]\n\n",
+    text.slice(Math.max(midStart + mid, text.length - tail)),
+  ].join("");
+}
+
 function transcriptSource(text: string): EpisodeSource {
   return {
     text: trimSource(text),

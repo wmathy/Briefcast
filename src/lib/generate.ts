@@ -13,7 +13,9 @@ import {
   countWords,
   parseBriefLength,
   RecapBandError,
+  recapAudioInBand,
   resolveBriefLength,
+  spokenRecapInBand,
   type BriefLength,
 } from "@/lib/brief-length";
 import { mp3PlaybackDurationSeconds } from "@/lib/tts";
@@ -57,6 +59,49 @@ export function shouldPublishBrief(input: {
   return "publish";
 }
 
+export function canReuseWrittenBrief(input: {
+  existingSourceType?: string | null;
+  spokenRecap?: string | null;
+  storedLength?: string | null;
+  sourceLimited?: boolean | null;
+  requestedLength: BriefLength;
+}): boolean {
+  if (input.existingSourceType !== "transcript" || !input.spokenRecap?.trim()) return false;
+  if (parseBriefLength(input.storedLength) !== input.requestedLength) return false;
+  if (input.sourceLimited) return true;
+  return spokenRecapInBand(input.spokenRecap, input.requestedLength);
+}
+
+export function canReuseRecapAudio(input: {
+  audioSeconds?: number | null;
+  sourceLimited?: boolean | null;
+  requestedLength: BriefLength;
+}): boolean {
+  const seconds = input.audioSeconds;
+  if (!seconds || seconds <= 0) return false;
+  if (input.sourceLimited) return true;
+  return recapAudioInBand(seconds, input.requestedLength);
+}
+
+export function planBriefGeneration(input: {
+  hasCompleteTranscript: boolean;
+  existingSourceType?: string | null;
+  spokenRecap?: string | null;
+  storedLength?: string | null;
+  sourceLimited?: boolean | null;
+  audioSeconds?: number | null;
+  requestedLength: BriefLength;
+}): "already-published" | "tts-only" | "write-then-tts" | "keep-existing" | "unavailable" {
+  const reuseWritten = canReuseWrittenBrief(input);
+  const reuseAudio = canReuseRecapAudio(input);
+  if (reuseWritten && reuseAudio) return "already-published";
+  if (reuseWritten) return "tts-only";
+  if (input.hasCompleteTranscript) return "write-then-tts";
+  return isPublishedTranscriptBrief({ sourceType: input.existingSourceType })
+    ? "keep-existing"
+    : "unavailable";
+}
+
 export async function purgeNotesOnlyBriefs() {
   const prisma = getPrisma();
   const notes = await prisma.brief.findMany({
@@ -79,10 +124,12 @@ async function resolveRssMeta(input: {
   guid: string;
   feedUrl: string;
 }): Promise<{ transcriptUrl: string | null; durationSeconds: number | null; audioUrl: string | null }> {
-  if (input.storedUrl && input.storedDuration && input.storedAudio) {
+  // Publisher transcript is optional. Rogan/Tucker have audio + duration but no
+  // transcriptUrl — do not re-download a multi-thousand-item feed on every turn.
+  if (input.storedAudio) {
     return {
-      transcriptUrl: input.storedUrl,
-      durationSeconds: input.storedDuration,
+      transcriptUrl: input.storedUrl ?? null,
+      durationSeconds: input.storedDuration ?? null,
       audioUrl: input.storedAudio,
     };
   }
@@ -122,6 +169,41 @@ export async function generateEpisodeBrief(
 
   const briefLength =
     options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
+
+  const reusePlan = planBriefGeneration({
+    hasCompleteTranscript: false,
+    existingSourceType: episode.brief?.sourceType,
+    spokenRecap: episode.brief?.spokenRecap,
+    storedLength: episode.brief?.briefLength,
+    sourceLimited: episode.brief?.sourceLimited,
+    audioSeconds: episode.recapAudio?.durationSeconds,
+    requestedLength: briefLength,
+  });
+
+  if (reusePlan === "already-published") {
+    return {
+      episodeId: episode.id,
+      published: true,
+      skipped: true,
+      reason: "already-published" as const,
+      message: null,
+      sourceType: "transcript" as const,
+      briefLength: parseBriefLength(episode.brief?.briefLength ?? briefLength),
+      sourceLimited: episode.brief?.sourceLimited ?? false,
+      spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
+      audioSeconds: episode.recapAudio?.durationSeconds ?? null,
+    };
+  }
+
+  if (reusePlan === "tts-only" && episode.brief) {
+    return persistRecapAudioAfterTts({
+      episodeId: episode.id,
+      spoken: episode.brief.spokenRecap,
+      briefLength: parseBriefLength(episode.brief.briefLength ?? briefLength),
+      sourceLimited: episode.brief.sourceLimited,
+      sourceType: "transcript",
+    });
+  }
 
   const rss = await resolveRssMeta({
     storedUrl: episode.transcriptUrl,
@@ -217,23 +299,9 @@ export async function generateEpisodeBrief(
   const guest = brief.guest ?? episode.guest;
   const spoken = brief.spokenRecap.trim();
   const confidenceNote = mergeConfidenceNote(source.confidenceNote, brief.briefLength, brief.sourceLimited);
-  const audio = await xaiTtsMp3(spoken, TTS_SPEED);
-  const audioSeconds = mp3PlaybackDurationSeconds(audio);
-  try {
-    assertRecapInBand({
-      spokenText: spoken,
-      audioSeconds,
-      length: brief.briefLength,
-      sourceLimited: brief.sourceLimited,
-    });
-  } catch (error) {
-    if (error instanceof RecapBandError) {
-      console.error("[recap]", error.message);
-      throw error;
-    }
-    throw error;
-  }
 
+  // Persist the written brief before TTS so a 300s timeout keeps the draft.
+  // The next continue pass only synthesizes audio.
   await prisma.$transaction([
     prisma.brief.upsert({
       where: { episodeId: episode.id },
@@ -261,20 +329,6 @@ export async function generateEpisodeBrief(
         sourceLimited: brief.sourceLimited,
       },
     }),
-    prisma.recapAudio.upsert({
-      where: { episodeId: episode.id },
-      update: {
-        mimeType: "audio/mpeg",
-        data: new Uint8Array(audio),
-        durationSeconds: Math.round(audioSeconds),
-      },
-      create: {
-        episodeId: episode.id,
-        mimeType: "audio/mpeg",
-        data: new Uint8Array(audio),
-        durationSeconds: Math.round(audioSeconds),
-      },
-    }),
     prisma.episode.update({
       where: { id: episode.id },
       data: {
@@ -286,16 +340,73 @@ export async function generateEpisodeBrief(
     }),
   ]);
 
-  return {
+  const oldWordsOutOfBand =
+    episode.brief?.spokenRecap &&
+    !episode.brief.sourceLimited &&
+    !spokenRecapInBand(episode.brief.spokenRecap, parseBriefLength(episode.brief.briefLength ?? briefLength));
+  if (oldWordsOutOfBand) {
+    await prisma.recapAudio.deleteMany({ where: { episodeId: episode.id } });
+  }
+
+  return persistRecapAudioAfterTts({
     episodeId: episode.id,
+    spoken,
+    briefLength: brief.briefLength,
+    sourceLimited: brief.sourceLimited,
+    sourceType: "transcript",
+  });
+}
+
+async function persistRecapAudioAfterTts(input: {
+  episodeId: string;
+  spoken: string;
+  briefLength: BriefLength;
+  sourceLimited: boolean;
+  sourceType: "transcript";
+}) {
+  const prisma = getPrisma();
+  const audio = await xaiTtsMp3(input.spoken, TTS_SPEED);
+  const audioSeconds = mp3PlaybackDurationSeconds(audio);
+  try {
+    assertRecapInBand({
+      spokenText: input.spoken,
+      audioSeconds,
+      length: input.briefLength,
+      sourceLimited: input.sourceLimited,
+    });
+  } catch (error) {
+    if (error instanceof RecapBandError) {
+      console.error("[recap]", error.message);
+      throw error;
+    }
+    throw error;
+  }
+
+  await prisma.recapAudio.upsert({
+    where: { episodeId: input.episodeId },
+    update: {
+      mimeType: "audio/mpeg",
+      data: new Uint8Array(audio),
+      durationSeconds: Math.round(audioSeconds),
+    },
+    create: {
+      episodeId: input.episodeId,
+      mimeType: "audio/mpeg",
+      data: new Uint8Array(audio),
+      durationSeconds: Math.round(audioSeconds),
+    },
+  });
+
+  return {
+    episodeId: input.episodeId,
     published: true,
     skipped: false,
     reason: null,
     message: null,
-    sourceType: "transcript" as const,
-    briefLength: brief.briefLength,
-    sourceLimited: brief.sourceLimited,
-    spokenWords: countWords(spoken),
+    sourceType: input.sourceType,
+    briefLength: input.briefLength,
+    sourceLimited: input.sourceLimited,
+    spokenWords: countWords(input.spoken),
     audioSeconds: Math.round(audioSeconds),
   };
 }

@@ -154,12 +154,16 @@ export async function refreshFollowedBriefs(options?: {
   const poll = await collectFollowedAutoBriefIds(options);
   const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LIMIT);
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
-  const remaining = batch.remaining + (generation.inProgress ?? 0);
+  // Recount after this turn so a persisted draft whose TTS timed out stays queued.
+  const stillNeeded = await collectWindowedAutoBriefIds({
+    userId: options?.userId,
+    showId: options?.showId,
+  });
   return {
     ...poll,
     ...generation,
     generating: batch.toGenerate.length,
-    remaining,
+    remaining: stillNeeded.length,
     errors: [...poll.syncErrors, ...generation.errors],
   };
 }

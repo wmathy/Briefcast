@@ -50,3 +50,9 @@ export function refreshHasMore(data: RefreshResult): boolean {
   if (data.reason === "transcript-in-progress") return true;
   return Boolean(data.remaining && data.remaining > 0);
 }
+
+export function refreshShouldContinue(status: number, data: RefreshResult): boolean {
+  if (status === 504 || status === 502) return true;
+  if (data.reason === "transcript-in-progress") return true;
+  return refreshHasMore(data);
+}

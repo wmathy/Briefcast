@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { refreshHasMore, refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
+import { refreshShouldContinue, refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
 
 /** Keeps writing the latest unbriefed followed episode until none remain or a write fails. */
 export function AutoGenerateLatest({ needed }: { needed: boolean }) {
@@ -21,19 +21,24 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     while (more && !cancelled && turns < 80) {
       turns += 1;
         const response = await fetch("/api/queue/refresh?continue=1", { method: "POST" });
-        const data = (await response.json()) as RefreshResult;
+        const data = (await response.json().catch(() => ({}))) as RefreshResult;
         if (cancelled) return;
         if (!response.ok) {
+          if (refreshShouldContinue(response.status, data) && turns < 80) {
+            setStatus(response.status === 504 || response.status === 502 ? "Continuing…" : refreshStatusLabel(data));
+            more = true;
+            continue;
+          }
           setStatus(data.error ?? "Could not write.");
           return;
         }
         setStatus(refreshStatusLabel(data));
-        more = refreshHasMore(data);
+        more = refreshShouldContinue(response.status, data);
         if (
           data.errors &&
           data.errors.length > 0 &&
           !data.generated &&
-          data.reason !== "transcript-in-progress"
+          !more
         ) {
           return;
         }

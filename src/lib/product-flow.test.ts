@@ -56,6 +56,21 @@ describe("briefs come from the full episode transcript", () => {
     expect(read("../app/library/page.tsx")).toContain("FULL_TRANSCRIPT_UNAVAILABLE");
     expect(read("../app/library/page.tsx")).not.toContain("notes-only (not the full episode)");
   });
+
+  it("persists the written brief before TTS so a timeout can resume audio-only", () => {
+    const generate = read("./generate.ts");
+    const write = generate.indexOf("const brief = await writeBriefFromSource");
+    const upsert = generate.indexOf("prisma.brief.upsert", write);
+    const tts = generate.indexOf("return persistRecapAudioAfterTts", upsert);
+    expect(write).toBeGreaterThan(-1);
+    expect(upsert).toBeGreaterThan(write);
+    expect(tts).toBeGreaterThan(upsert);
+    expect(generate).toContain('return "tts-only"');
+    expect(read("./sources.ts")).toContain("briefPromptSource");
+    expect(read("./brief.ts")).toContain("briefPromptSource(input.source.text)");
+    expect(read("./auto-brief.ts")).toContain("stillNeeded");
+    expect(read("../components/AutoGenerateLatest.tsx")).toContain("refreshShouldContinue");
+  });
 });
 
 describe("episode player sits above the summary", () => {
