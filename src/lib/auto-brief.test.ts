@@ -1,126 +1,28 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_BRIEF_LIMIT,
-  FOLLOW_AUTO_BRIEF_LIMIT,
-  collectAutoBriefJobs,
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
-  pickAutoBriefEpisodeIds,
+  takeAutoBriefBatch,
 } from "./auto-brief-policy";
 
-const older = new Date("2026-08-01T00:00:00.000Z");
-const newer = new Date("2026-09-01T00:00:00.000Z");
-
-describe("pickAutoBriefEpisodeIds", () => {
-  it("on first follow, generates only the newest imported episode", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: true,
-        newlyCreated: [
-          { id: "old", publishedAt: older },
-          { id: "new", publishedAt: newer },
-        ],
-        latestUnbriefedId: "old",
-      }),
-    ).toEqual(["new"]);
-  });
-
-  it("on first follow with an empty feed, uses the latest unbriefed episode if one exists", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: true,
-        newlyCreated: [],
-        latestUnbriefedId: "already-there",
-      }),
-    ).toEqual(["already-there"]);
-  });
-
-  it("after a show is already synced, generates newly published episodes newest first", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [
-          { id: "old", publishedAt: older },
-          { id: "new", publishedAt: newer },
-        ],
-        latestUnbriefedId: "new",
-        limit: 2,
-      }),
-    ).toEqual(["new", "old"]);
-  });
-
-  it("when no new RSS items appear, backfills the latest episode that still has no brief", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [],
-        latestUnbriefedId: "latest-without-brief",
-      }),
-    ).toEqual(["latest-without-brief"]);
-  });
-
-  it("does not pick anything when there is nothing new and every episode already has a brief", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [],
-        latestUnbriefedId: null,
-      }),
-    ).toEqual([]);
-  });
-
+describe("episodeNeedsSpokenBrief", () => {
   it("treats a seed brief with no spoken audio as still needing generation", () => {
     expect(episodeNeedsSpokenBrief({ brief: { id: "seed" }, recapAudio: null })).toBe(true);
     expect(episodeNeedsSpokenBrief({ brief: { id: "real" }, recapAudio: { id: "mp3" } })).toBe(false);
-    expect(FOLLOW_AUTO_BRIEF_LIMIT).toBe(1);
-  });
-
-  it("caps how many briefs one poll will start", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [
-          { id: "a", publishedAt: newer },
-          { id: "b", publishedAt: older },
-          { id: "c", publishedAt: new Date("2026-07-01T00:00:00.000Z") },
-        ],
-        latestUnbriefedId: null,
-        limit: AUTO_BRIEF_LIMIT,
-      }),
-    ).toHaveLength(AUTO_BRIEF_LIMIT);
   });
 });
 
-describe("collectAutoBriefJobs", () => {
-  it("walks every followed show and caps the global generate list", () => {
-    const ids = collectAutoBriefJobs(
-      [
-        {
-          existingEpisodeCount: 4,
-          createdEpisodes: [{ id: "show-a-new", publishedAt: newer }],
-          latestUnbriefedId: "show-a-new",
-        },
-        {
-          existingEpisodeCount: 0,
-          createdEpisodes: [
-            { id: "show-b-old", publishedAt: older },
-            { id: "show-b-new", publishedAt: newer },
-          ],
-          latestUnbriefedId: "show-b-new",
-        },
-        {
-          existingEpisodeCount: 8,
-          createdEpisodes: [],
-          latestUnbriefedId: "show-c-latest",
-        },
-      ],
-      2,
-    );
-    expect(ids).toEqual(["show-a-new", "show-b-new"]);
+describe("takeAutoBriefBatch", () => {
+  it("does not silently drop extra shows — leftover ids are remaining", () => {
+    const batch = takeAutoBriefBatch(["a", "b", "c", "d", "e"], 3);
+    expect(batch.toGenerate).toEqual(["a", "b", "c"]);
+    expect(batch.remaining).toBe(2);
+    expect(AUTO_BRIEF_LIMIT).toBe(3);
   });
 
-  it("does not invent jobs for shows nobody follows (empty input)", () => {
-    expect(collectAutoBriefJobs([])).toEqual([]);
+  it("dedupes and ignores empty ids", () => {
+    expect(takeAutoBriefBatch(["a", "a", ""], 2)).toEqual({ toGenerate: ["a"], remaining: 0 });
   });
 });
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
+import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import { hasXaiKey } from "@/lib/env";
 
 export const maxDuration = 300;
@@ -19,23 +19,23 @@ export async function POST(
   const prisma = getPrisma();
   const follow = await prisma.follow.findUnique({
     where: { userId_showId: { userId: user.id, showId: id } },
-    include: { show: true },
   });
   if (!follow) {
     return NextResponse.json({ error: "Follow this show to check for episodes." }, { status: 403 });
   }
 
   try {
-    const result = await syncShowAndPickAutoBriefs(follow.show.id, follow.show.feedUrl);
-    const generation = await generateAutoBriefs(result.autoBriefIds, { userId: user.id });
+    const result = await refreshFollowedBriefs({ userId: user.id, showId: id });
     return NextResponse.json({
       fetched: result.fetched,
       created: result.created,
-      generating: result.autoBriefIds.length,
-      generated: generation.generated,
+      generating: result.generating,
+      generated: result.generated,
+      remaining: result.remaining,
+      skipped: result.skipped,
       canGenerate: hasXaiKey(),
-      reason: generation.reason,
-      errors: generation.errors,
+      reason: result.reason,
+      errors: result.errors,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RSS refresh failed.";

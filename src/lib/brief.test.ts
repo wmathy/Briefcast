@@ -23,6 +23,20 @@ describe("parseBriefJson", () => {
 });
 
 describe("spokenRecapFromBrief", () => {
+  it("covers the written brief so spoken audio is not a clipped teaser", () => {
+    const spoken = spokenRecapFromBrief({
+      showTitle: "Up First from NPR",
+      episodeTitle: "Palmyra",
+      guest: "Lauren Sommer",
+      overview: sample.overview,
+      segments: sample.segments as { title: string; speaker: "guest"; summary: string }[],
+      takeaways: sample.takeaways,
+    });
+    expect(spoken).toContain(sample.overview);
+    expect(spoken).toContain(sample.segments[0].summary);
+    expect(spoken.length).toBeGreaterThan("A spoken recap.".length);
+  });
+
   it("includes show, title, and takeaways", () => {
     const spoken = spokenRecapFromBrief({
       showTitle: "Up First from NPR",

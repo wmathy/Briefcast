@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
+import { refreshHasMore, refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
 
-/** When a followed show's latest episode has no spoken brief, write it without a click. */
+/** Keeps writing the latest unbriefed followed episode until none remain or a write fails. */
 export function AutoGenerateLatest({ needed }: { needed: boolean }) {
   const router = useRouter();
   const started = useRef(false);
@@ -14,19 +14,28 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     if (!needed || started.current) return;
     started.current = true;
     let cancelled = false;
+
     (async () => {
-      const response = await fetch("/api/queue/refresh", { method: "POST" });
-      const data = (await response.json()) as RefreshResult;
-      if (cancelled) return;
-      if (!response.ok) {
-        setStatus(data.error ?? "Could not write the latest brief.");
-        return;
+      let more = true;
+      while (more && !cancelled) {
+        const response = await fetch("/api/queue/refresh", { method: "POST" });
+        const data = (await response.json()) as RefreshResult;
+        if (cancelled) return;
+        if (!response.ok) {
+          setStatus(data.error ?? "Could not write the latest brief.");
+          return;
+        }
+        setStatus(refreshStatusLabel(data));
+        more = refreshHasMore(data);
+        if (data.errors && data.errors.length > 0 && !data.generated) {
+          return;
+        }
       }
-      setStatus(refreshStatusLabel(data));
-      router.refresh();
+      if (!cancelled) router.refresh();
     })().catch(() => {
       if (!cancelled) setStatus("Could not write the latest brief.");
     });
+
     return () => {
       cancelled = true;
     };

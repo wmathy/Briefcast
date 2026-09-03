@@ -4,9 +4,9 @@ import {
   XAI_TTS_MAX_CHARS,
   concatMp3,
   estimateMp3DurationSeconds,
+  mpeg1Layer3FrameLength,
   splitTextForTts,
-  stripId3v1,
-  stripId3v2,
+  stripXingOrVbriFrame,
 } from "./tts";
 import { BRIEF_LENGTH_SPECS, countWords } from "./brief-length";
 
@@ -18,24 +18,23 @@ function sentenceBlock(chars: number): string {
 }
 
 describe("xAI TTS character cap", () => {
-  it("documents the official 15,000 character unary limit", () => {
+  it("chunks well below the official 15,000 character unary limit", () => {
     expect(XAI_TTS_MAX_CHARS).toBe(15_000);
-    expect(XAI_TTS_CHUNK_CHARS).toBeLessThanOrEqual(XAI_TTS_MAX_CHARS);
+    expect(XAI_TTS_CHUNK_CHARS).toBeLessThanOrEqual(4_000);
   });
 
-  it("keeps a Medium recap in one request and splits a Long recap instead of truncating", () => {
+  it("splits Medium and Long recaps instead of sending one clip-prone request", () => {
     const medium = "word ".repeat(BRIEF_LENGTH_SPECS.medium.spokenWords.max).trim();
-    expect(medium.length).toBeLessThan(XAI_TTS_MAX_CHARS);
-    expect(splitTextForTts(medium)).toEqual([medium]);
+    expect(medium.length).toBeGreaterThan(XAI_TTS_CHUNK_CHARS);
+    expect(splitTextForTts(medium).length).toBeGreaterThan(1);
+    expect(splitTextForTts(medium).every((chunk) => chunk.length <= XAI_TTS_CHUNK_CHARS)).toBe(true);
 
     const long = sentenceBlock(22_000);
     expect(long.length).toBeGreaterThan(XAI_TTS_MAX_CHARS);
     const chunks = splitTextForTts(long);
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.every((chunk) => chunk.length <= XAI_TTS_CHUNK_CHARS)).toBe(true);
-    expect(chunks.join(" ").replace(/\s+/g, " ")).toContain("spoken sentence");
     expect(countWords(chunks.join(" "))).toBeGreaterThanOrEqual(countWords(long) - 2);
-    expect(chunks.join("")).not.toEqual(long.slice(0, XAI_TTS_MAX_CHARS));
     expect(chunks.reduce((sum, chunk) => sum + chunk.length, 0)).toBeGreaterThan(XAI_TTS_MAX_CHARS);
   });
 
@@ -45,13 +44,12 @@ describe("xAI TTS character cap", () => {
     expect(text.length).toBeGreaterThan(XAI_TTS_MAX_CHARS);
     const chunks = splitTextForTts(text);
     expect(chunks.at(-1)).toContain(tailMarker);
-    expect(text.includes(tailMarker)).toBe(true);
     expect(text.slice(0, XAI_TTS_MAX_CHARS).includes(tailMarker)).toBe(false);
   });
 });
 
 describe("concatMp3", () => {
-  it("stitches chunks and strips extra ID3 tags so one file remains playable", () => {
+  it("stitches payload bytes and strips ID3 so one file remains playable", () => {
     const id3v2 = Buffer.alloc(10 + 4);
     id3v2.write("ID3", 0);
     id3v2[6] = 0;
@@ -66,10 +64,24 @@ describe("concatMp3", () => {
     const first = Buffer.concat([id3v2, Buffer.from("AAAA"), id3v1]);
     const second = Buffer.concat([id3v2, Buffer.from("BBBB"), id3v1]);
     const joined = concatMp3([first, second]);
+    expect(joined.toString("ascii")).toBe("AAAABBBB");
+  });
 
-    expect(joined.subarray(0, 3).toString("ascii")).toBe("ID3");
-    expect(stripId3v2(joined).subarray(0, 8).toString("ascii")).toBe("AAAABBBB");
-    expect(stripId3v1(joined).subarray(-4).toString("ascii")).toBe("BBBB");
+  it("drops a Xing duration header so playback is not clipped to the first chunk", () => {
+    const bitrate128 = 9;
+    const sr44100 = 0;
+    const header = Buffer.from([0xff, 0xfb, (bitrate128 << 4) | (sr44100 << 2), 0x00]);
+    const frameLength = mpeg1Layer3FrameLength(header, 0);
+    expect(frameLength).toBeGreaterThan(4);
+    const xing = Buffer.alloc(frameLength);
+    header.copy(xing);
+    xing.write("Xing", 36);
+    const audio = Buffer.from("AUDIO");
+    const stripped = stripXingOrVbriFrame(Buffer.concat([xing, audio]));
+    expect(stripped.toString("ascii")).toBe("AUDIO");
+    expect(concatMp3([Buffer.concat([xing, Buffer.from("ONE")]), Buffer.concat([xing, Buffer.from("TWO")])]).toString(
+      "ascii",
+    )).toBe("ONETWO");
   });
 
   it("estimates CBR duration from payload size", () => {

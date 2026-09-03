@@ -4,28 +4,20 @@ import { generateEpisodeBrief } from "@/lib/generate";
 import {
   AUTO_BRIEF_LIMIT,
   episodeNeedsSpokenBrief,
-  pickAutoBriefEpisodeIds,
+  takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
-import { syncShowEpisodes, type SyncedEpisode } from "@/lib/podcasts";
+import { syncShowEpisodes } from "@/lib/podcasts";
 
 export {
   AUTO_BRIEF_LIMIT,
-  FOLLOW_AUTO_BRIEF_LIMIT,
-  collectAutoBriefJobs,
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
-  pickAutoBriefEpisodeIds,
+  takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
 
-export async function syncShowAndPickAutoBriefs(
-  showId: string,
-  feedUrl: string,
-  options?: { limit?: number },
-) {
+export async function latestEpisodeNeedingBrief(showId: string) {
   const prisma = getPrisma();
-  const existingEpisodeCount = await prisma.episode.count({ where: { showId } });
-  const sync = await syncShowEpisodes(showId, feedUrl);
-  const latestNeedingBrief = await prisma.episode.findFirst({
+  return prisma.episode.findFirst({
     where: {
       showId,
       OR: [{ brief: { is: null } }, { recapAudio: { is: null } }],
@@ -33,26 +25,23 @@ export async function syncShowAndPickAutoBriefs(
     orderBy: { publishedAt: "desc" },
     select: { id: true },
   });
-  const autoBriefIds = pickAutoBriefEpisodeIds({
-    initialImport: existingEpisodeCount === 0,
-    newlyCreated: sync.createdEpisodes,
-    latestUnbriefedId: latestNeedingBrief?.id ?? null,
-    limit: options?.limit,
-  });
-  return { ...sync, autoBriefIds };
+}
+
+export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string) {
+  const sync = await syncShowEpisodes(showId, feedUrl);
+  const latest = await latestEpisodeNeedingBrief(showId);
+  return { ...sync, autoBriefIds: latest ? [latest.id] : [] };
 }
 
 export async function generateAutoBriefs(
   episodeIds: string[],
-  options?: { limit?: number; userId?: string },
+  options?: { userId?: string },
 ) {
-  const limit = options?.limit ?? AUTO_BRIEF_LIMIT;
-  const attemptedIds = episodeIds.slice(0, limit);
   if (!hasXaiKey()) {
     return {
       attempted: 0,
       generated: 0,
-      skipped: attemptedIds.length,
+      skipped: episodeIds.length,
       errors: [] as string[],
       reason: "missing-xai-key" as const,
     };
@@ -60,32 +49,39 @@ export async function generateAutoBriefs(
 
   const prisma = getPrisma();
   let generated = 0;
+  let skipped = 0;
   const errors: string[] = [];
 
-  for (const id of attemptedIds) {
+  for (const id of episodeIds) {
     const episode = await prisma.episode.findUnique({
       where: { id },
-      include: { brief: true, recapAudio: true },
+      include: { brief: true, recapAudio: true, show: true },
     });
-    if (!episode || !episodeNeedsSpokenBrief(episode)) continue;
+    if (!episode) {
+      errors.push(`Episode ${id} was not found.`);
+      continue;
+    }
+    if (!episodeNeedsSpokenBrief(episode)) {
+      skipped += 1;
+      continue;
+    }
     try {
       await generateEpisodeBrief(id, { userId: options?.userId });
       generated += 1;
     } catch (error) {
-      errors.push(error instanceof Error ? error.message : "Generate failed.");
+      const message = error instanceof Error ? error.message : "Generate failed.";
+      errors.push(`${episode.show.title}: ${message}`);
     }
   }
 
-  return { attempted: attemptedIds.length, generated, skipped: 0, errors, reason: null };
+  return { attempted: episodeIds.length, generated, skipped, errors, reason: null };
 }
 
-export async function pollFollowedShowsAndGenerate(options?: {
+export async function collectFollowedAutoBriefIds(options?: {
   userId?: string;
   showId?: string;
-  limit?: number;
 }) {
   const prisma = getPrisma();
-  const limit = options?.limit ?? AUTO_BRIEF_LIMIT;
   const shows = await prisma.show.findMany({
     where: options?.showId
       ? { id: options.showId }
@@ -95,14 +91,16 @@ export async function pollFollowedShowsAndGenerate(options?: {
     select: { id: true, feedUrl: true, title: true },
   });
 
-  const createdEpisodes: SyncedEpisode[] = [];
+  let created = 0;
+  let fetched = 0;
   const autoBriefIds: string[] = [];
   const syncErrors: string[] = [];
 
   for (const show of shows) {
     try {
       const result = await syncShowAndPickAutoBriefs(show.id, show.feedUrl);
-      createdEpisodes.push(...result.createdEpisodes);
+      created += result.created;
+      fetched += result.fetched;
       autoBriefIds.push(...result.autoBriefIds);
     } catch (error) {
       const message = error instanceof Error ? error.message : "RSS sync failed.";
@@ -110,12 +108,29 @@ export async function pollFollowedShowsAndGenerate(options?: {
     }
   }
 
-  const uniqueIds = [...new Set(autoBriefIds)].slice(0, limit);
   return {
     shows: shows.length,
     fetchedShows: shows.length,
-    created: createdEpisodes.length,
-    autoBriefIds: uniqueIds,
+    fetched,
+    created,
+    autoBriefIds: [...new Set(autoBriefIds)],
     syncErrors,
+  };
+}
+
+/** One pipeline for follow, Library/show check, and cron. */
+export async function refreshFollowedBriefs(options?: {
+  userId?: string;
+  showId?: string;
+}) {
+  const poll = await collectFollowedAutoBriefIds(options);
+  const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LIMIT);
+  const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
+  return {
+    ...poll,
+    ...generation,
+    generating: batch.toGenerate.length,
+    remaining: batch.remaining,
+    errors: [...poll.syncErrors, ...generation.errors],
   };
 }

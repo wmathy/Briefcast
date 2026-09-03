@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { generateAutoBriefs, pollFollowedShowsAndGenerate } from "@/lib/auto-brief";
+import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import { hasXaiKey } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -13,16 +13,17 @@ export async function POST() {
   }
 
   try {
-    const poll = await pollFollowedShowsAndGenerate({ userId: user.id });
-    const generation = await generateAutoBriefs(poll.autoBriefIds, { userId: user.id });
+    const result = await refreshFollowedBriefs({ userId: user.id });
     return NextResponse.json({
-      created: poll.created,
-      fetchedShows: poll.fetchedShows,
-      generating: poll.autoBriefIds.length,
-      generated: generation.generated,
+      created: result.created,
+      fetchedShows: result.fetchedShows,
+      generating: result.generating,
+      generated: result.generated,
+      remaining: result.remaining,
+      skipped: result.skipped,
       canGenerate: hasXaiKey(),
-      reason: generation.reason,
-      errors: [...poll.syncErrors, ...generation.errors],
+      reason: result.reason,
+      errors: result.errors,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RSS refresh failed.";

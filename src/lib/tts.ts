@@ -1,8 +1,11 @@
 /** Official xAI unary TTS cap: POST /v1/tts accepts at most 15,000 characters. */
 export const XAI_TTS_MAX_CHARS = 15_000;
 
-/** Leave headroom so a chunk never trips the 15k hard cap. */
-export const XAI_TTS_CHUNK_CHARS = 14_000;
+/**
+ * Chunk well below 15k. xAI can end a long unary request early; smaller chunks
+ * plus stitching keeps Short/Medium/Long recaps complete.
+ */
+export const XAI_TTS_CHUNK_CHARS = 4_000;
 
 const SENTENCE_BREAK = /[.!?]["')\]]?\s+/g;
 
@@ -87,21 +90,44 @@ export function stripId3v1(buffer: Buffer): Buffer {
   return buffer.subarray(0, buffer.length - 128);
 }
 
+const MPEG1_LAYER3_BITRATE = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const MPEG1_SAMPLE_RATE = [44100, 48000, 32000];
+
+export function mpeg1Layer3FrameLength(buffer: Buffer, offset: number): number | null {
+  if (offset + 4 > buffer.length) return null;
+  if (buffer[offset] !== 0xff || (buffer[offset + 1] & 0xe0) !== 0xe0) return null;
+  const version = (buffer[offset + 1] >> 3) & 0x03;
+  const layer = (buffer[offset + 1] >> 1) & 0x03;
+  if (version !== 3 || layer !== 1) return null;
+  const bitrate = MPEG1_LAYER3_BITRATE[(buffer[offset + 2] >> 4) & 0x0f];
+  const sampleRate = MPEG1_SAMPLE_RATE[(buffer[offset + 2] >> 2) & 0x03];
+  if (!bitrate || !sampleRate) return null;
+  const padding = (buffer[offset + 2] >> 1) & 0x01;
+  return Math.floor((144 * bitrate * 1000) / sampleRate) + padding;
+}
+
+/** Drop Xing/Info/VBRI headers so a concat file is not declared as only the first chunk. */
+export function stripXingOrVbriFrame(buffer: Buffer): Buffer {
+  const audio = stripId3v1(stripId3v2(buffer));
+  const frameLength = mpeg1Layer3FrameLength(audio, 0);
+  if (!frameLength || frameLength > audio.length) return audio;
+  const frame = audio.subarray(0, frameLength);
+  if (frame.includes(Buffer.from("Xing")) || frame.includes(Buffer.from("Info")) || frame.includes(Buffer.from("VBRI"))) {
+    return audio.subarray(frameLength);
+  }
+  return audio;
+}
+
 export function concatMp3(buffers: Buffer[]): Buffer {
   if (buffers.length === 0) return Buffer.alloc(0);
-  if (buffers.length === 1) return buffers[0];
-  return Buffer.concat(
-    buffers.map((buffer, index) => {
-      let out = buffer;
-      if (index > 0) out = stripId3v2(out);
-      if (index < buffers.length - 1) out = stripId3v1(out);
-      return out;
-    }),
-  );
+  const frames = buffers.map((buffer) => stripXingOrVbriFrame(buffer)).filter((part) => part.length > 0);
+  if (frames.length === 0) return Buffer.alloc(0);
+  if (frames.length === 1) return frames[0];
+  return Buffer.concat(frames);
 }
 
 /** CBR duration estimate used only in tests / sanity checks (128 kbps xAI default). */
 export function estimateMp3DurationSeconds(buffer: Buffer, bitRate = 128_000): number {
   if (bitRate <= 0) return 0;
-  return (stripId3v1(stripId3v2(buffer)).length * 8) / bitRate;
+  return (stripXingOrVbriFrame(buffer).length * 8) / bitRate;
 }

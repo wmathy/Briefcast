@@ -6,14 +6,18 @@ function read(rel: string) {
   return readFileSync(path.join(__dirname, rel), "utf8");
 }
 
-describe("automatic brief generation is in-request", () => {
-  it("does not fire-and-forget follow or refresh generation", () => {
-    expect(read("../app/api/follows/route.ts")).not.toContain("after(");
-    expect(read("../app/api/queue/refresh/route.ts")).not.toContain("after(");
-    expect(read("../app/api/shows/[id]/refresh/route.ts")).not.toContain("after(");
-    expect(read("../app/api/follows/route.ts")).toContain("await generateAutoBriefs");
-    expect(read("../app/api/queue/refresh/route.ts")).toContain("await generateAutoBriefs");
-    expect(read("../app/api/shows/[id]/refresh/route.ts")).toContain("await generateAutoBriefs");
+describe("automatic brief generation is one awaited pipeline", () => {
+  it("follow, refresh, and cron all await refreshFollowedBriefs", () => {
+    for (const file of [
+      "../app/api/follows/route.ts",
+      "../app/api/queue/refresh/route.ts",
+      "../app/api/shows/[id]/refresh/route.ts",
+      "../app/api/cron/poll-episodes/route.ts",
+    ]) {
+      const source = read(file);
+      expect(source).not.toContain("after(");
+      expect(source).toContain("refreshFollowedBriefs");
+    }
   });
 });
 
@@ -30,5 +34,13 @@ describe("show page lists the RSS catalog", () => {
     expect(read("./podcasts.ts")).toContain("fetchRssEpisodes(feedUrl, limit)");
     expect(read("./podcasts.ts")).not.toContain("limit = 20");
     expect(read("../app/shows/[id]/page.tsx")).toContain("from the show’s RSS feed");
+  });
+});
+
+describe("episode player sits above the summary", () => {
+  it("passes the player into BriefView before overview text", () => {
+    expect(read("../app/episodes/[id]/page.tsx")).toContain("player={player}");
+    const view = read("../components/BriefView.tsx");
+    expect(view.indexOf("{player}")).toBeLessThan(view.indexOf("Overview"));
   });
 });

@@ -157,15 +157,16 @@ export async function writeBriefFromSource(input: {
 
   const raw = await xaiChatJson(prompt);
   const brief = parseBriefJson(raw);
-  if (!brief.spokenRecap.trim()) {
-    brief.spokenRecap = spokenRecapFromBrief({
-      showTitle: input.showTitle,
-      episodeTitle: input.episodeTitle,
-      guest: brief.guest,
-      overview: brief.overview,
-      segments: brief.segments,
-      takeaways: brief.takeaways,
-    });
+  const fromWritten = spokenRecapFromBrief({
+    showTitle: input.showTitle,
+    episodeTitle: input.episodeTitle,
+    guest: brief.guest,
+    overview: brief.overview,
+    segments: brief.segments,
+    takeaways: brief.takeaways,
+  });
+  if (countWords(fromWritten) > countWords(brief.spokenRecap)) {
+    brief.spokenRecap = fromWritten;
   }
 
   const expanded = await expandSpokenRecapIfShort({

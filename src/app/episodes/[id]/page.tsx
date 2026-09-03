@@ -11,6 +11,8 @@ import { formatBriefLengthLabel, parseBriefLength } from "@/lib/brief-length";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
@@ -18,13 +20,10 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     include: { show: true, brief: true, recapAudio: true },
   });
   if (!episode) notFound();
-  if (!user && !episode.seeded) redirect("/login");
 
-  const follow = user
-    ? await prisma.follow.findUnique({
-        where: { userId_showId: { userId: user.id, showId: episode.showId } },
-      })
-    : null;
+  const follow = await prisma.follow.findUnique({
+    where: { userId_showId: { userId: user.id, showId: episode.showId } },
+  });
   const followLength = follow ? parseBriefLength(follow.briefLength) : null;
   const storedBriefLength = episode.brief ? parseBriefLength(episode.brief.briefLength) : null;
   const nextLength = followLength ?? storedBriefLength;
@@ -35,11 +34,29 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     : [];
   const takeaways = episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
 
+  const player = episode.recapAudio ? (
+    <AudioPlayer
+      src={`/api/audio/${episode.id}`}
+      title={`${episode.show.title} · ${episode.title}`}
+    />
+  ) : (
+    <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
+      No spoken recap stored yet. Generation uses Grok Voice (xAI TTS) only.
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <Link href={`/shows/${episode.show.id}`} className="text-sm text-muted hover:text-ink">
         ← {episode.show.title}
       </Link>
+
+      {lengthChanged && followLength ? (
+        <p className="rounded-2xl border border-line bg-bg-card px-4 py-3 text-sm text-muted">
+          This follow is now {formatBriefLengthLabel(followLength)}. Generate again to rewrite the
+          brief and spoken recap. Changing length does not regenerate automatically.
+        </p>
+      ) : null}
 
       {episode.brief ? (
         <BriefView
@@ -55,29 +72,15 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
           confidenceNote={episode.brief.confidenceNote}
           briefLength={episode.brief.briefLength}
           sourceLimited={episode.brief.sourceLimited}
+          player={player}
         />
       ) : (
-        <div className="space-y-3">
-          <h1 className="font-display text-4xl">{episode.title}</h1>
-          <p className="text-muted">No brief yet. Generate one from the transcript or official show notes.</p>
-        </div>
-      )}
-
-      {lengthChanged && followLength ? (
-        <p className="rounded-2xl border border-line bg-bg-card px-4 py-3 text-sm text-muted">
-          This follow is now {formatBriefLengthLabel(followLength)}. Generate again to rewrite the
-          brief and spoken recap. Changing length does not regenerate automatically.
-        </p>
-      ) : null}
-
-      {episode.recapAudio ? (
-        <AudioPlayer
-          src={`/api/audio/${episode.id}`}
-          title={`${episode.show.title} · ${episode.title}`}
-        />
-      ) : (
-        <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-          No spoken recap stored yet. Generation uses Grok Voice (xAI TTS) only.
+        <div className="space-y-6">
+          <div className="space-y-3">
+            <h1 className="font-display text-4xl">{episode.title}</h1>
+            <p className="text-muted">No brief yet. A new episode is written automatically; you can also retry here.</p>
+          </div>
+          {player}
         </div>
       )}
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { BriefSegment } from "@/lib/brief";
 import { formatBriefDate } from "@/lib/brief";
 import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
@@ -15,6 +16,7 @@ export function BriefView({
   confidenceNote,
   briefLength,
   sourceLimited,
+  player,
 }: {
   showTitle: string;
   episodeTitle: string;
@@ -28,6 +30,7 @@ export function BriefView({
   confidenceNote: string | null;
   briefLength?: BriefLength | string | null;
   sourceLimited?: boolean;
+  player?: ReactNode;
 }) {
   return (
     <article className="space-y-8">
@@ -44,6 +47,8 @@ export function BriefView({
           </a>
         ) : null}
       </header>
+
+      {player}
 
       {sourceLimited ? (
         <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
