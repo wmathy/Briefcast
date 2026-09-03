@@ -106,7 +106,9 @@ export function formatDiarizedTranscript(result: {
   return (result.text ?? "").trim();
 }
 
-const MAX_STT_DOWNLOAD_BYTES = 180 * 1024 * 1024;
+const MAX_STT_DOWNLOAD_BYTES = 500 * 1024 * 1024;
+const STT_URL_FALLBACK_MAX_SECONDS = 15 * 60;
+const STT_RETRIES = 3;
 
 export type SttResult = {
   text: string;
@@ -125,41 +127,107 @@ function sttForm(keyterms: string[]): FormData {
   return form;
 }
 
-async function postStt(form: FormData): Promise<SttResult | null> {
+export async function postStt(form: FormData): Promise<SttResult | null> {
   const key = requireXaiKey();
-  const response = await fetch(`${XAI_API_BASE}/stt`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}` },
-    body: form,
-    signal: AbortSignal.timeout(240_000),
-  });
-  if (!response.ok) return null;
-  const data = (await response.json()) as {
-    text?: string;
-    duration?: number;
-    words?: { text?: string; speaker?: number }[];
-  };
-  const text = formatDiarizedTranscript(data);
-  if (text.length <= 80) return null;
-  return { text, duration: typeof data.duration === "number" ? data.duration : 0, chunks: 1 };
+  try {
+    const response = await fetch(`${XAI_API_BASE}/stt`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}` },
+      body: form,
+      signal: AbortSignal.timeout(240_000),
+    });
+    const body = await response.text();
+    if (!response.ok) {
+      console.error("[stt] xAI STT", response.status, body.slice(0, 280));
+      if (response.status === 429 || response.status === 503) {
+        return null;
+      }
+      return null;
+    }
+    const data = JSON.parse(body) as {
+      text?: string;
+      duration?: number;
+      words?: { text?: string; speaker?: number }[];
+    };
+    const text = formatDiarizedTranscript(data);
+    if (text.length <= 80) {
+      console.error("[stt] empty transcript");
+      return null;
+    }
+    const duration = typeof data.duration === "number" && data.duration > 0 ? data.duration : 0;
+    return { text, duration, chunks: 1 };
+  } catch (error) {
+    console.error("[stt]", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const AUDIO_HEADERS = {
+  Accept: "audio/*,*/*",
+  "User-Agent": "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)",
+};
+
+export async function fetchAudioSlice(
+  audioUrl: string,
+  start: number,
+  wantBytes: number,
+): Promise<{ data: Buffer; totalBytes: number } | null> {
+  try {
+    const end = start + wantBytes - 1;
+    const response = await fetch(audioUrl, {
+      headers: { ...AUDIO_HEADERS, Range: `bytes=${start}-${end}` },
+      signal: AbortSignal.timeout(90_000),
+    });
+    if (response.status === 416) return null;
+    if (!response.ok && response.status !== 206) return null;
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength < 80) return null;
+
+    const range = response.headers.get("content-range");
+    const rangeTotal = range?.match(/\/(\d+)\s*$/)?.[1];
+    if (response.status === 206 && rangeTotal) {
+      return { data: buffer, totalBytes: Number(rangeTotal) };
+    }
+
+    const totalBytes = buffer.byteLength;
+    if (totalBytes > MAX_STT_DOWNLOAD_BYTES) return null;
+    const data = start > 0 ? buffer.subarray(start, Math.min(buffer.length, start + wantBytes)) : buffer;
+    if (data.byteLength < 80) return null;
+    return { data, totalBytes };
+  } catch (error) {
+    console.error("[stt] audio fetch failed:", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 async function fetchAudioForStt(audioUrl: string): Promise<Buffer | null> {
-  try {
-    const response = await fetch(audioUrl, {
-      headers: {
-        Accept: "audio/*,*/*",
-        "User-Agent": "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)",
-      },
-      signal: AbortSignal.timeout(120_000),
-    });
-    if (!response.ok) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (buffer.byteLength < 80 || buffer.byteLength > MAX_STT_DOWNLOAD_BYTES) return null;
-    return buffer;
-  } catch {
-    return null;
+  const slice = await fetchAudioSlice(audioUrl, 0, MAX_STT_DOWNLOAD_BYTES);
+  if (!slice) return null;
+  if (slice.data.byteLength < 80 || slice.data.byteLength > MAX_STT_DOWNLOAD_BYTES) return null;
+  return slice.data;
+}
+
+export async function sttBufferChunk(
+  part: Buffer,
+  index: number,
+  keyterms: string[],
+): Promise<SttResult | null> {
+  for (let attempt = 1; attempt <= STT_RETRIES; attempt += 1) {
+    const form = sttForm(keyterms);
+    form.append("file", new Blob([Uint8Array.from(part)], { type: "audio/mpeg" }), `episode-${index + 1}.mp3`);
+    const result = await postStt(form);
+    if (result) {
+      console.info("[stt] chunk", index + 1, "ok", `${Math.round(result.duration)}s`, `${result.text.length} chars`);
+      return result;
+    }
+    console.error("[stt] chunk", index + 1, `attempt ${attempt}/${STT_RETRIES} failed`);
+    await sleep(1_500 * attempt);
   }
+  return null;
 }
 
 async function sttChunks(file: Buffer, keyterms: string[]): Promise<SttResult | null> {
@@ -168,13 +236,7 @@ async function sttChunks(file: Buffer, keyterms: string[]): Promise<SttResult | 
   const texts: string[] = [];
   let duration = 0;
   for (const [index, part] of parts.entries()) {
-    const form = sttForm(keyterms);
-    form.append(
-      "file",
-      new Blob([Uint8Array.from(part)], { type: "audio/mpeg" }),
-      `episode-${index + 1}.mp3`,
-    );
-    const result = await postStt(form);
+    const result = await sttBufferChunk(part, index, keyterms);
     if (!result) return null;
     texts.push(result.text);
     duration += result.duration;
@@ -186,11 +248,18 @@ async function sttChunks(file: Buffer, keyterms: string[]): Promise<SttResult | 
 export async function xaiSttFromAudioUrl(
   audioUrl: string,
   keyterms: string[] = [],
+  options?: { durationSeconds?: number | null },
 ): Promise<SttResult | null> {
   const file = await fetchAudioForStt(audioUrl);
   if (file) {
     const fromFile = await sttChunks(file, keyterms);
     if (fromFile) return fromFile;
+  }
+
+  const episodeSeconds = options?.durationSeconds ?? 0;
+  if (episodeSeconds >= STT_URL_FALLBACK_MAX_SECONDS) {
+    console.error("[stt] skipping URL fallback for long episode", episodeSeconds);
+    return null;
   }
 
   const viaUrl = sttForm(keyterms);

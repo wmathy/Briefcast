@@ -57,6 +57,7 @@ model Episode {
   show        Show        @relation(fields: [showId], references: [id], onDelete: Cascade)
   brief       Brief?
   recapAudio  RecapAudio?
+  sttJob      SttJob?
 
   @@unique([showId, guid])
 }
@@ -78,10 +79,29 @@ model Brief {
 }
 
 model RecapAudio {
-  id        String   @id @default(cuid())
-  episodeId String   @unique
-  mimeType  String   @default("audio/mpeg")
-  data      Bytes
-  createdAt DateTime @default(now())
-  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  episodeId        String   @unique
+  mimeType         String   @default("audio/mpeg")
+  data             Bytes
+  durationSeconds  Int?
+  createdAt        DateTime @default(now())
+  episode          Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+}
+
+/** Durable Grok STT progress so a 3-hour episode can finish across many function turns. */
+model SttJob {
+  id              String    @id @default(cuid())
+  episodeId       String    @unique
+  audioUrl        String
+  nextByte        Int       @default(0)
+  totalBytes      Int?
+  chunkCount      Int       @default(0)
+  coveredSeconds  Int       @default(0)
+  text            String    @default("")
+  status          String    @default("pending")
+  error           String?
+  lockedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 }

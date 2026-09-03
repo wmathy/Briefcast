@@ -7,6 +7,7 @@ import {
   episodeNeedsSpokenBrief,
   takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
+import { collectWindowedAutoBriefIds, recapNeedsRewrite } from "@/lib/queue";
 import { syncShowEpisodes } from "@/lib/podcasts";
 
 export {
@@ -18,24 +19,15 @@ export {
 
 export async function latestEpisodeNeedingBrief(showId: string) {
   const prisma = getPrisma();
-  return prisma.episode.findFirst({
-    where: {
-      showId,
-      OR: [
-        { brief: { is: null } },
-        { recapAudio: { is: null } },
-        { brief: { is: { sourceType: "shownotes" } } },
-      ],
-    },
-    orderBy: { publishedAt: "desc" },
-    select: { id: true },
-  });
+  const ids = await collectWindowedAutoBriefIds({ showId });
+  const id = ids[0];
+  return id ? { id } : null;
 }
 
-export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string) {
+export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string, userId?: string) {
   const sync = await syncShowEpisodes(showId, feedUrl);
-  const latest = await latestEpisodeNeedingBrief(showId);
-  return { ...sync, autoBriefIds: latest ? [latest.id] : [] };
+  const autoBriefIds = await collectWindowedAutoBriefIds({ showId, userId });
+  return { ...sync, autoBriefIds };
 }
 
 export async function generateAutoBriefs(
@@ -55,6 +47,7 @@ export async function generateAutoBriefs(
   const prisma = getPrisma();
   let generated = 0;
   let skipped = 0;
+  let inProgress = 0;
   const errors: string[] = [];
 
   for (const id of episodeIds) {
@@ -66,12 +59,16 @@ export async function generateAutoBriefs(
       errors.push(`Episode ${id} was not found.`);
       continue;
     }
-    if (!episodeNeedsSpokenBrief(episode)) {
+    if (!episodeNeedsSpokenBrief(episode) && !recapNeedsRewrite(episode)) {
       skipped += 1;
       continue;
     }
     try {
-      const result = await generateEpisodeBrief(id, { userId: options?.userId, force: false });
+      const result = await generateEpisodeBrief(id, { userId: options?.userId, force: recapNeedsRewrite(episode) });
+      if (result.reason === "transcript-in-progress") {
+        inProgress += 1;
+        continue;
+      }
       if (result.published) {
         generated += 1;
       } else {
@@ -90,10 +87,14 @@ export async function generateAutoBriefs(
     attempted: episodeIds.length,
     generated,
     skipped,
+    inProgress,
     errors,
-    reason: generated === 0 && errors.some((item) => item.includes(FULL_TRANSCRIPT_UNAVAILABLE))
-      ? ("no-full-transcript" as const)
-      : null,
+    reason:
+      inProgress > 0
+        ? ("transcript-in-progress" as const)
+        : generated === 0 && errors.some((item) => item.includes(FULL_TRANSCRIPT_UNAVAILABLE))
+          ? ("no-full-transcript" as const)
+          : null,
   };
 }
 
@@ -118,7 +119,7 @@ export async function collectFollowedAutoBriefIds(options?: {
 
   for (const show of shows) {
     try {
-      const result = await syncShowAndPickAutoBriefs(show.id, show.feedUrl);
+      const result = await syncShowAndPickAutoBriefs(show.id, show.feedUrl, options?.userId);
       created += result.created;
       fetched += result.fetched;
       autoBriefIds.push(...result.autoBriefIds);
@@ -147,11 +148,12 @@ export async function refreshFollowedBriefs(options?: {
   const poll = await collectFollowedAutoBriefIds(options);
   const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LIMIT);
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
+  const remaining = batch.remaining + (generation.inProgress ?? 0);
   return {
     ...poll,
     ...generation,
     generating: batch.toGenerate.length,
-    remaining: batch.remaining,
+    remaining,
     errors: [...poll.syncErrors, ...generation.errors],
   };
 }

@@ -16,8 +16,10 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     let cancelled = false;
 
     (async () => {
-      let more = true;
-      while (more && !cancelled) {
+    let more = true;
+    let turns = 0;
+    while (more && !cancelled && turns < 40) {
+      turns += 1;
         const response = await fetch("/api/queue/refresh", { method: "POST" });
         const data = (await response.json()) as RefreshResult;
         if (cancelled) return;
@@ -27,7 +29,12 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
         }
         setStatus(refreshStatusLabel(data));
         more = refreshHasMore(data);
-        if (data.errors && data.errors.length > 0 && !data.generated) {
+        if (
+          data.errors &&
+          data.errors.length > 0 &&
+          !data.generated &&
+          data.reason !== "transcript-in-progress"
+        ) {
           return;
         }
       }

@@ -9,11 +9,16 @@ import {
   isPublishedTranscriptBrief,
 } from "@/lib/transcript-complete";
 import {
+  assertRecapInBand,
   countWords,
   parseBriefLength,
+  RecapBandError,
   resolveBriefLength,
   type BriefLength,
 } from "@/lib/brief-length";
+import { mp3PlaybackDurationSeconds } from "@/lib/tts";
+import { TranscriptInProgressError } from "@/lib/stt-job";
+import { recapNeedsRewrite } from "@/lib/queue";
 
 export async function resolveEpisodeBriefLength(
   showId: string,
@@ -126,17 +131,39 @@ export async function generateEpisodeBrief(
     feedUrl: episode.show.feedUrl,
   });
 
-  const source = await loadEpisodeSource({
-    description: episode.description,
-    transcriptUrl: rss.transcriptUrl,
-    episodeLink: episode.link,
-    audioUrl: rss.audioUrl,
-    durationSeconds: rss.durationSeconds,
-    showTitle: episode.show.title,
-    episodeTitle: episode.title,
-  });
+  let source;
+  try {
+    source = await loadEpisodeSource({
+      description: episode.description,
+      transcriptUrl: rss.transcriptUrl,
+      episodeLink: episode.link,
+      audioUrl: rss.audioUrl,
+      durationSeconds: rss.durationSeconds,
+      showTitle: episode.show.title,
+      episodeTitle: episode.title,
+      episodeId: episode.id,
+    });
+  } catch (error) {
+    if (error instanceof TranscriptInProgressError) {
+      return {
+        episodeId: episode.id,
+        published: isPublishedTranscriptBrief(episode.brief),
+        skipped: true,
+        reason: "transcript-in-progress" as const,
+        message: "Transcribing…",
+        sourceType: episode.brief?.sourceType ?? null,
+        briefLength,
+        sourceLimited: false,
+        spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
+        sttChunks: error.progress.chunks,
+        sttBytes: error.progress.nextByte,
+        sttTotalBytes: error.progress.totalBytes,
+      };
+    }
+    throw error;
+  }
 
-  const force = options?.force ?? true;
+  const force = (options?.force ?? true) || recapNeedsRewrite(episode);
   const decision = shouldPublishBrief({
     hasCompleteTranscript: Boolean(source),
     existingSourceType: episode.brief?.sourceType,
@@ -191,6 +218,21 @@ export async function generateEpisodeBrief(
   const spoken = brief.spokenRecap.trim();
   const confidenceNote = mergeConfidenceNote(source.confidenceNote, brief.briefLength, brief.sourceLimited);
   const audio = await xaiTtsMp3(spoken, TTS_SPEED);
+  const audioSeconds = mp3PlaybackDurationSeconds(audio);
+  try {
+    assertRecapInBand({
+      spokenText: spoken,
+      audioSeconds,
+      length: brief.briefLength,
+      sourceLimited: brief.sourceLimited,
+    });
+  } catch (error) {
+    if (error instanceof RecapBandError) {
+      console.error("[recap]", error.message);
+      throw error;
+    }
+    throw error;
+  }
 
   await prisma.$transaction([
     prisma.brief.upsert({
@@ -221,8 +263,17 @@ export async function generateEpisodeBrief(
     }),
     prisma.recapAudio.upsert({
       where: { episodeId: episode.id },
-      update: { mimeType: "audio/mpeg", data: new Uint8Array(audio) },
-      create: { episodeId: episode.id, mimeType: "audio/mpeg", data: new Uint8Array(audio) },
+      update: {
+        mimeType: "audio/mpeg",
+        data: new Uint8Array(audio),
+        durationSeconds: Math.round(audioSeconds),
+      },
+      create: {
+        episodeId: episode.id,
+        mimeType: "audio/mpeg",
+        data: new Uint8Array(audio),
+        durationSeconds: Math.round(audioSeconds),
+      },
     }),
     prisma.episode.update({
       where: { id: episode.id },
@@ -245,5 +296,6 @@ export async function generateEpisodeBrief(
     briefLength: brief.briefLength,
     sourceLimited: brief.sourceLimited,
     spokenWords: countWords(spoken),
+    audioSeconds: Math.round(audioSeconds),
   };
 }

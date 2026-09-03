@@ -8,6 +8,8 @@ import {
   isSourceTooThin,
   mergeConfidenceNote,
   parseBriefLength,
+  RecapBandError,
+  spokenRecapInBand,
   type BriefLength,
 } from "@/lib/brief-length";
 
@@ -126,7 +128,7 @@ export function buildSpokenRecapPrompt(input: {
     ? `Stay faithful and as complete as the source allows. Do not invent. The spoken recap may be shorter than ${spec.spokenWords.min} words.`
     : `Write ${spec.spokenWords.min}–${spec.spokenWords.max} words so the recap is about ${spec.durationLabel} at 1x (~150 words/minute). Do not pad, repeat, or invent.`;
 
-  return `Rewrite only the spoken recap for this episode brief. Use the SOURCE TEXT and the written brief. Do not invent.
+  return `Rewrite only the spoken recap for this episode brief. Use the written brief. Do not invent.
 
 ${target}
 
@@ -137,9 +139,6 @@ Overview: ${input.brief.overview}
 Segments: ${JSON.stringify(input.brief.segments)}
 Takeaways: ${JSON.stringify(input.brief.takeaways)}
 Source type: ${input.source.sourceType}
-
-SOURCE TEXT:
-${input.source.text}
 
 Return JSON: { "spokenRecap": string }`;
 }
@@ -182,6 +181,12 @@ export async function writeBriefFromSource(input: {
     sourceLimited,
   });
 
+  if (!sourceLimited && !spokenRecapInBand(expanded.spokenRecap, briefLength)) {
+    throw new RecapBandError(
+      `Spoken recap is ${countWords(expanded.spokenRecap)} words; ${BRIEF_LENGTH_SPECS[briefLength].label} requires ${BRIEF_LENGTH_SPECS[briefLength].spokenWords.min}–${BRIEF_LENGTH_SPECS[briefLength].spokenWords.max}.`,
+    );
+  }
+
   return { ...expanded, briefLength, sourceLimited };
 }
 
@@ -194,20 +199,28 @@ export async function expandSpokenRecapIfShort(input: {
   sourceLimited: boolean;
 }): Promise<GeneratedBrief> {
   const spec = BRIEF_LENGTH_SPECS[input.briefLength];
-  const words = countWords(input.brief.spokenRecap);
-  const minAcceptable = Math.floor(spec.spokenWords.min * 0.85);
-  if (input.sourceLimited || words >= minAcceptable) {
-    return input.brief;
-  }
+  let best = input.brief;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const words = countWords(best.spokenRecap);
+    if (input.sourceLimited || spokenRecapInBand(best.spokenRecap, input.briefLength)) {
+      return best;
+    }
+    const minAcceptable = Math.floor(spec.spokenWords.min * 0.85);
+    if (words >= minAcceptable && attempt === 0) {
+      // still try once more to land inside the band
+    }
 
-  const raw = await xaiChatJson(buildSpokenRecapPrompt(input));
-  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const parsed = spokenOnlySchema.parse(JSON.parse(cleaned) as unknown);
-  const nextWords = countWords(parsed.spokenRecap);
-  if (nextWords <= words) {
-    return input.brief;
+    const raw = await xaiChatJson(buildSpokenRecapPrompt({ ...input, brief: best }));
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = spokenOnlySchema.parse(JSON.parse(cleaned) as unknown);
+    const nextWords = countWords(parsed.spokenRecap);
+    if (nextWords > words) {
+      best = { ...best, spokenRecap: parsed.spokenRecap.trim() };
+    } else {
+      break;
+    }
   }
-  return { ...input.brief, spokenRecap: parsed.spokenRecap.trim() };
+  return best;
 }
 
 export function formatBriefDate(date: Date): string {

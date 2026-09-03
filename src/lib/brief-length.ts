@@ -107,6 +107,42 @@ export function spokenRecapInBand(text: string, length: BriefLength): boolean {
   return words >= min && words <= max;
 }
 
+/** TTS variance around the 1x minute band. 10% keeps 8–12 min from failing at 7:55. */
+export function recapAudioInBand(durationSeconds: number, length: BriefLength): boolean {
+  const spec = BRIEF_LENGTH_SPECS[length];
+  const minutes = durationSeconds / 60;
+  return minutes >= spec.minutes.min * 0.9 && minutes <= spec.minutes.max * 1.1;
+}
+
+export class RecapBandError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RecapBandError";
+  }
+}
+
+export function assertRecapInBand(input: {
+  spokenText: string;
+  audioSeconds: number;
+  length: BriefLength;
+  sourceLimited: boolean;
+}): void {
+  if (input.sourceLimited) return;
+  const spec = BRIEF_LENGTH_SPECS[input.length];
+  const words = countWords(input.spokenText);
+  const minutes = input.audioSeconds / 60;
+  if (!spokenRecapInBand(input.spokenText, input.length)) {
+    throw new RecapBandError(
+      `Spoken recap is ${words} words; ${spec.label} requires ${spec.spokenWords.min}–${spec.spokenWords.max} (~${spec.durationLabel}).`,
+    );
+  }
+  if (!recapAudioInBand(input.audioSeconds, input.length)) {
+    throw new RecapBandError(
+      `Spoken recap audio is ${minutes.toFixed(1)} min; ${spec.label} requires ${spec.minutes.min}–${spec.minutes.max} min at 1x.`,
+    );
+  }
+}
+
 export function isSourceTooThin(sourceText: string, length: BriefLength): boolean {
   return countWords(sourceText) < BRIEF_LENGTH_SPECS[length].spokenWords.min;
 }

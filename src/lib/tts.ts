@@ -132,6 +132,7 @@ export function countMpeg1Layer3Frames(buffer: Buffer): {
   frames: number;
   sampleRate: number;
   header: Buffer;
+  consumed: number;
 } | null {
   if (buffer.length < 4) return null;
   const header = Buffer.from(buffer.subarray(0, 4));
@@ -147,14 +148,14 @@ export function countMpeg1Layer3Frames(buffer: Buffer): {
     offset += length;
   }
   if (frames === 0) return null;
-  return { frames, sampleRate, header };
+  return { frames, sampleRate, header, consumed: offset };
 }
 
 /** Prepend a Xing frame whose frame/byte counts match the full file, not the first chunk. */
 export function writeFullFileXing(audio: Buffer): Buffer {
   const payload = stripXingOrVbriFrame(audio);
   const counted = countMpeg1Layer3Frames(payload);
-  if (!counted) return payload;
+  if (!counted || counted.consumed < payload.length * 0.95) return payload;
 
   const frameLength = mpeg1Layer3FrameLength(counted.header, 0);
   const xingAt = xingTagOffset(mpeg1ChannelCount(counted.header));
@@ -191,7 +192,7 @@ export function concatMp3(buffers: Buffer[]): Buffer {
 export function mp3PlaybackDurationSeconds(buffer: Buffer, bitRate = 128_000): number {
   const payload = stripXingOrVbriFrame(buffer);
   const counted = countMpeg1Layer3Frames(payload);
-  if (counted) {
+  if (counted && counted.consumed >= payload.length * 0.95) {
     return (counted.frames * MPEG1_SAMPLES_PER_FRAME) / counted.sampleRate;
   }
   return estimateMp3DurationSeconds(payload, bitRate);

@@ -14,6 +14,7 @@ import {
   youtubeTitlesMatch,
 } from "@/lib/transcripts";
 import { xaiSttFromAudioUrl } from "@/lib/xai";
+import { transcribeEpisodeDurable, TranscriptInProgressError } from "@/lib/stt-job";
 
 export type EpisodeSource = {
   text: string;
@@ -101,6 +102,7 @@ export async function loadEpisodeSource(input: {
   durationSeconds?: number | null;
   showTitle?: string | null;
   episodeTitle?: string | null;
+  episodeId?: string | null;
 }): Promise<EpisodeSource | null> {
   const notes = input.description.trim();
   const tried = new Set<string>();
@@ -167,7 +169,14 @@ export async function loadEpisodeSource(input: {
   }
 
   const alreadyTriedOfficialNpr = fromNpr.length > 0;
-  if (!alreadyTriedOfficialNpr && input.showTitle && input.episodeTitle && attempts < MAX_FETCH_ATTEMPTS) {
+  const skipSlowDiscovery = Boolean(input.audioUrl && (input.durationSeconds ?? 0) >= 20 * 60);
+  if (
+    !alreadyTriedOfficialNpr &&
+    input.showTitle &&
+    input.episodeTitle &&
+    attempts < MAX_FETCH_ATTEMPTS &&
+    !skipSlowDiscovery
+  ) {
     const videoId = await searchYoutubeVideoId(input.showTitle, input.episodeTitle);
     if (videoId) {
       const hit = await tryYoutubeCaptions(videoId, tryUrl);
@@ -192,18 +201,27 @@ async function transcribeEpisodeAudio(
     showTitle?: string | null;
     episodeTitle?: string | null;
     durationSeconds?: number | null;
+    episodeId?: string | null;
   },
   accept: (text: string, coveredAudioSeconds?: number | null) => EpisodeSource | null,
 ): Promise<EpisodeSource | null> {
   if (!input.audioUrl || !hasXaiKey()) return null;
+  const keyterms = [input.showTitle, input.episodeTitle].filter((value): value is string => Boolean(value));
   try {
-    const result = await xaiSttFromAudioUrl(
-      input.audioUrl,
-      [input.showTitle, input.episodeTitle].filter((value): value is string => Boolean(value)),
-    );
+    const result = input.episodeId
+      ? await transcribeEpisodeDurable({
+          episodeId: input.episodeId,
+          audioUrl: input.audioUrl,
+          keyterms,
+          durationSeconds: input.durationSeconds,
+        })
+      : await xaiSttFromAudioUrl(input.audioUrl, keyterms, { durationSeconds: input.durationSeconds });
     if (!result) return null;
-    return accept(result.text, result.duration);
-  } catch {
+    const covered = result.duration > 0 ? result.duration : null;
+    return accept(result.text, covered);
+  } catch (error) {
+    if (error instanceof TranscriptInProgressError) throw error;
+    console.error("[stt] transcribe failed:", error instanceof Error ? error.message : error);
     return null;
   }
 }

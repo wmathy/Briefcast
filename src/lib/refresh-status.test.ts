@@ -15,7 +15,9 @@ describe("refreshStatusLabel", () => {
     );
     expect(refreshHasMore({ remaining: 2, generated: 3 })).toBe(true);
     expect(refreshHasMore({ remaining: 0, generated: 3 })).toBe(false);
-    expect(refreshHasMore({ remaining: 2, generated: 0 })).toBe(false);
+    expect(refreshHasMore({ remaining: 2, generated: 0 })).toBe(true);
+    expect(refreshHasMore({ reason: "transcript-in-progress", generated: 0, remaining: 1 })).toBe(true);
+    expect(refreshStatusLabel({ reason: "transcript-in-progress" })).toBe("Transcribing…");
   });
 
   it("surfaces a failed write instead of silent skip", () => {

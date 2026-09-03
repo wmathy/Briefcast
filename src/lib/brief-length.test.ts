@@ -12,6 +12,7 @@ import {
   parseBriefLength,
   resolveBriefLength,
   sourceLimitedNote,
+  recapAudioInBand,
   spokenRecapInBand,
 } from "./brief-length";
 
@@ -72,6 +73,8 @@ describe("spoken length bands at 1x", () => {
     expect(BRIEF_LENGTH_SPECS.short.minutes).toEqual({ min: 3, max: 5 });
     expect(BRIEF_LENGTH_SPECS.medium.minutes).toEqual({ min: 8, max: 12 });
     expect(BRIEF_LENGTH_SPECS.long.minutes).toEqual({ min: 20, max: 30 });
+    expect(recapAudioInBand(10 * 60, "medium")).toBe(true);
+    expect(recapAudioInBand(98, "medium")).toBe(false);
   });
 
   it("does not treat playback speed as a way to hit a longer band", () => {

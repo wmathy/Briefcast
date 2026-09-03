@@ -18,7 +18,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
     where: { id },
-    include: { show: true, brief: true, recapAudio: true },
+    include: { show: true, brief: true, recapAudio: true, sttJob: true },
   });
   if (!episode) notFound();
 
@@ -37,8 +37,12 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
   const takeaways = published && episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
 
   const durationHint =
-    published && episode.brief?.spokenRecap
-      ? Math.max(1, Math.round(estimateSpokenMinutesAt1x(episode.brief.spokenRecap) * 60))
+    published && episode.recapAudio
+      ? episode.recapAudio.durationSeconds && episode.recapAudio.durationSeconds > 0
+        ? episode.recapAudio.durationSeconds
+        : episode.brief?.spokenRecap
+          ? Math.max(1, Math.round(estimateSpokenMinutesAt1x(episode.brief.spokenRecap) * 60))
+          : undefined
       : undefined;
 
   const player =
@@ -75,7 +79,11 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
       ) : (
         <div className="space-y-3">
           <h1 className="font-display text-3xl leading-tight sm:text-4xl">{episode.title}</h1>
-          <p className="text-muted">{FULL_TRANSCRIPT_UNAVAILABLE_SHORT}</p>
+          <p className="text-muted">
+            {episode.sttJob && episode.sttJob.status !== "failed" && episode.sttJob.status !== "complete"
+              ? "Transcribing…"
+              : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
+          </p>
         </div>
       )}
 

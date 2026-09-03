@@ -12,6 +12,9 @@ export type RefreshResult = {
 };
 
 export function refreshStatusLabel(data: RefreshResult): string {
+  if (data.reason === "transcript-in-progress") {
+    return "Transcribing…";
+  }
   if (data.reason === "no-full-transcript") {
     return "No full transcript yet";
   }
@@ -43,11 +46,7 @@ export function refreshStatusLabel(data: RefreshResult): string {
 }
 
 export function refreshHasMore(data: RefreshResult): boolean {
-  return Boolean(
-    data.remaining &&
-      data.remaining > 0 &&
-      (data.generated ?? 0) > 0 &&
-      !data.error &&
-      data.reason !== "missing-xai-key",
-  );
+  if (data.error || data.reason === "missing-xai-key") return false;
+  if (data.reason === "transcript-in-progress") return true;
+  return Boolean(data.remaining && data.remaining > 0);
 }

@@ -59,9 +59,11 @@ export function isCompleteEpisodeTranscript(input: {
   const noteWords = countWords(notes);
   const duration = input.durationSeconds && input.durationSeconds > 0 ? input.durationSeconds : null;
   const minFromDuration = duration && duration >= 45 ? minWordsForFullEpisode(duration) : null;
+  const covered =
+    input.coveredAudioSeconds && input.coveredAudioSeconds > 0 ? input.coveredAudioSeconds : null;
 
-  if (input.coveredAudioSeconds != null && duration && duration >= 45) {
-    if (input.coveredAudioSeconds < duration * 0.85) {
+  if (covered != null && duration && duration >= 45) {
+    if (covered < duration * 0.85) {
       return {
         ok: false,
         reason: "partial-audio-coverage",
