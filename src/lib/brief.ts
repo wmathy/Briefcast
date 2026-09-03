@@ -126,7 +126,7 @@ export function buildSpokenRecapPrompt(input: {
   const spec = BRIEF_LENGTH_SPECS[input.briefLength];
   const target = input.sourceLimited
     ? `Stay faithful and as complete as the source allows. Do not invent. The spoken recap may be shorter than ${spec.spokenWords.min} words.`
-    : `Write ${spec.spokenWords.min}–${spec.spokenWords.max} words so the recap is about ${spec.durationLabel} at 1x (~150 words/minute). Do not pad, repeat, or invent.`;
+    : `Write ${spec.spokenWords.min}–${spec.spokenWords.max} words so the recap is about ${spec.durationLabel} at 1x (~150 words/minute). If the current recap is too long, cut it down without inventing. Do not pad or repeat.`;
 
   return `Rewrite only the spoken recap for this episode brief. Use the written brief. Do not invent.
 
@@ -180,14 +180,22 @@ export async function writeBriefFromSource(input: {
     briefLength,
     sourceLimited,
   });
+  const fitted = await fitSpokenRecapToBand({
+    showTitle: input.showTitle,
+    episodeTitle: input.episodeTitle,
+    brief: expanded,
+    source: input.source,
+    briefLength,
+    sourceLimited,
+  });
 
-  if (!sourceLimited && !spokenRecapInBand(expanded.spokenRecap, briefLength)) {
+  if (!sourceLimited && !spokenRecapInBand(fitted.spokenRecap, briefLength)) {
     throw new RecapBandError(
-      `Spoken recap is ${countWords(expanded.spokenRecap)} words; ${BRIEF_LENGTH_SPECS[briefLength].label} requires ${BRIEF_LENGTH_SPECS[briefLength].spokenWords.min}–${BRIEF_LENGTH_SPECS[briefLength].spokenWords.max}.`,
+      `Spoken recap is ${countWords(fitted.spokenRecap)} words; ${BRIEF_LENGTH_SPECS[briefLength].label} requires ${BRIEF_LENGTH_SPECS[briefLength].spokenWords.min}–${BRIEF_LENGTH_SPECS[briefLength].spokenWords.max}.`,
     );
   }
 
-  return { ...expanded, briefLength, sourceLimited };
+  return { ...fitted, briefLength, sourceLimited };
 }
 
 export async function expandSpokenRecapIfShort(input: {
@@ -205,9 +213,8 @@ export async function expandSpokenRecapIfShort(input: {
     if (input.sourceLimited || spokenRecapInBand(best.spokenRecap, input.briefLength)) {
       return best;
     }
-    const minAcceptable = Math.floor(spec.spokenWords.min * 0.85);
-    if (words >= minAcceptable && attempt === 0) {
-      // still try once more to land inside the band
+    if (words >= spec.spokenWords.min) {
+      return best;
     }
 
     const raw = await xaiChatJson(buildSpokenRecapPrompt({ ...input, brief: best }));
@@ -221,6 +228,49 @@ export async function expandSpokenRecapIfShort(input: {
     }
   }
   return best;
+}
+
+export function clipSpokenRecapToMaxWords(text: string, maxWords: number): string {
+  const tokens = text.trim().split(/\s+/);
+  if (tokens.length <= maxWords) return text.trim();
+  const clipped = tokens.slice(0, maxWords).join(" ");
+  const lastStop = Math.max(clipped.lastIndexOf(". "), clipped.lastIndexOf("? "), clipped.lastIndexOf("! "));
+  if (lastStop >= Math.floor(maxWords * 0.7)) {
+    return clipped.slice(0, lastStop + 1).trim();
+  }
+  return clipped;
+}
+
+export async function fitSpokenRecapToBand(input: {
+  showTitle: string;
+  episodeTitle: string;
+  brief: GeneratedBrief;
+  source: EpisodeSource;
+  briefLength: BriefLength;
+  sourceLimited: boolean;
+}): Promise<GeneratedBrief> {
+  if (input.sourceLimited || spokenRecapInBand(input.brief.spokenRecap, input.briefLength)) {
+    return input.brief;
+  }
+  const spec = BRIEF_LENGTH_SPECS[input.briefLength];
+  const words = countWords(input.brief.spokenRecap);
+  if (words <= spec.spokenWords.max) {
+    return input.brief;
+  }
+
+  const raw = await xaiChatJson(buildSpokenRecapPrompt(input));
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  let next = input.brief.spokenRecap;
+  try {
+    const parsed = spokenOnlySchema.parse(JSON.parse(cleaned) as unknown);
+    if (parsed.spokenRecap.trim()) next = parsed.spokenRecap.trim();
+  } catch {
+    // fall through to deterministic clip
+  }
+  if (!spokenRecapInBand(next, input.briefLength) && countWords(next) > spec.spokenWords.max) {
+    next = clipSpokenRecapToMaxWords(next, spec.spokenWords.max);
+  }
+  return { ...input.brief, spokenRecap: next };
 }
 
 export function formatBriefDate(date: Date): string {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBriefPrompt, parseBriefJson, spokenRecapFromBrief } from "./brief";
+import { clipSpokenRecapToMaxWords, buildBriefPrompt, parseBriefJson, spokenRecapFromBrief } from "./brief";
 import { BRIEF_LENGTH_SPECS } from "./brief-length";
 
 const sample = {
@@ -11,6 +11,16 @@ const sample = {
   takeaways: ["One", "Two", "Three", "Four"],
   spokenRecap: "A spoken recap.",
 };
+
+describe("clipSpokenRecapToMaxWords", () => {
+  it("cuts an overlong recap at a sentence so Medium stays in band", () => {
+    const sentences = Array.from({ length: 250 }, (_, i) => `This is spoken sentence number ${i} about later topics.`).join(" ");
+    expect(sentences.split(/\s+/).length).toBeGreaterThan(1800);
+    const clipped = clipSpokenRecapToMaxWords(sentences, 1800);
+    expect(clipped.split(/\s+/).length).toBeLessThanOrEqual(1800);
+    expect(clipped.endsWith(".")).toBe(true);
+  });
+});
 
 describe("parseBriefJson", () => {
   it("accepts a faithful brief payload", () => {
