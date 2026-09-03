@@ -29,7 +29,7 @@ export async function upsertShowFromItunes(podcast: ItunesPodcast) {
   });
 }
 
-export async function syncShowEpisodes(showId: string, feedUrl: string, limit = 20) {
+export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: number | null) {
   const prisma = getPrisma();
   const episodes = await fetchRssEpisodes(feedUrl, limit);
   const createdEpisodes: SyncedEpisode[] = [];

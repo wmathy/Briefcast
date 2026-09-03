@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_BRIEF_LIMIT,
+  FOLLOW_AUTO_BRIEF_LIMIT,
   collectAutoBriefJobs,
+  episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
   pickAutoBriefEpisodeIds,
 } from "./auto-brief-policy";
@@ -65,6 +67,12 @@ describe("pickAutoBriefEpisodeIds", () => {
         latestUnbriefedId: null,
       }),
     ).toEqual([]);
+  });
+
+  it("treats a seed brief with no spoken audio as still needing generation", () => {
+    expect(episodeNeedsSpokenBrief({ brief: { id: "seed" }, recapAudio: null })).toBe(true);
+    expect(episodeNeedsSpokenBrief({ brief: { id: "real" }, recapAudio: { id: "mp3" } })).toBe(false);
+    expect(FOLLOW_AUTO_BRIEF_LIMIT).toBe(1);
   });
 
   it("caps how many briefs one poll will start", () => {

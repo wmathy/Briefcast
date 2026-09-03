@@ -3,30 +3,41 @@ import { hasXaiKey } from "@/lib/env";
 import { generateEpisodeBrief } from "@/lib/generate";
 import {
   AUTO_BRIEF_LIMIT,
+  episodeNeedsSpokenBrief,
   pickAutoBriefEpisodeIds,
 } from "@/lib/auto-brief-policy";
 import { syncShowEpisodes, type SyncedEpisode } from "@/lib/podcasts";
 
 export {
   AUTO_BRIEF_LIMIT,
+  FOLLOW_AUTO_BRIEF_LIMIT,
   collectAutoBriefJobs,
+  episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
   pickAutoBriefEpisodeIds,
 } from "@/lib/auto-brief-policy";
 
-export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string) {
+export async function syncShowAndPickAutoBriefs(
+  showId: string,
+  feedUrl: string,
+  options?: { limit?: number },
+) {
   const prisma = getPrisma();
   const existingEpisodeCount = await prisma.episode.count({ where: { showId } });
   const sync = await syncShowEpisodes(showId, feedUrl);
-  const latestUnbriefed = await prisma.episode.findFirst({
-    where: { showId, brief: null },
+  const latestNeedingBrief = await prisma.episode.findFirst({
+    where: {
+      showId,
+      OR: [{ brief: { is: null } }, { recapAudio: { is: null } }],
+    },
     orderBy: { publishedAt: "desc" },
     select: { id: true },
   });
   const autoBriefIds = pickAutoBriefEpisodeIds({
     initialImport: existingEpisodeCount === 0,
     newlyCreated: sync.createdEpisodes,
-    latestUnbriefedId: latestUnbriefed?.id ?? null,
+    latestUnbriefedId: latestNeedingBrief?.id ?? null,
+    limit: options?.limit,
   });
   return { ...sync, autoBriefIds };
 }
@@ -54,9 +65,9 @@ export async function generateAutoBriefs(
   for (const id of attemptedIds) {
     const episode = await prisma.episode.findUnique({
       where: { id },
-      include: { brief: true },
+      include: { brief: true, recapAudio: true },
     });
-    if (!episode || episode.brief) continue;
+    if (!episode || !episodeNeedsSpokenBrief(episode)) continue;
     try {
       await generateEpisodeBrief(id, { userId: options?.userId });
       generated += 1;

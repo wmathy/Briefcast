@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
 
 export function RefreshLibraryButton() {
   const router = useRouter();
@@ -15,35 +16,18 @@ export function RefreshLibraryButton() {
       onClick={async () => {
         setPending(true);
         const response = await fetch("/api/queue/refresh", { method: "POST" });
-        const data = (await response.json()) as {
-          created?: number;
-          generating?: number;
-          canGenerate?: boolean;
-          error?: string;
-        };
+        const data = (await response.json()) as RefreshResult;
         setPending(false);
         if (!response.ok) {
           setLabel(data.error ?? "Refresh failed");
           return;
         }
-        if (data.generating && !data.canGenerate) {
-          setLabel(
-            data.created
-              ? `Added ${data.created} · add XAI_API_KEY to write briefs`
-              : "New episode found · add XAI_API_KEY",
-          );
-        } else if (data.generating) {
-          setLabel(data.created ? `Added ${data.created} · writing brief` : "Writing brief…");
-        } else {
-          setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
-        }
-        if (data.created) {
-          router.refresh();
-        }
+        setLabel(refreshStatusLabel(data));
+        router.refresh();
       }}
       className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
     >
-      {pending ? "Checking…" : label}
+      {pending ? "Checking and writing brief…" : label}
     </button>
   );
 }

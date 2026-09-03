@@ -55,6 +55,15 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
         />
       )}
 
+      <div className="space-y-2">
+        <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Episodes</h2>
+        <p className="text-sm text-muted">
+          {show.episodes.length === 0
+            ? "No episodes in this show’s RSS feed yet."
+            : `${show.episodes.length} episode${show.episodes.length === 1 ? "" : "s"} from the show’s RSS feed.`}
+        </p>
+      </div>
+
       <ul className="space-y-3">
         {show.episodes.map((episode) => (
           <li key={episode.id}>

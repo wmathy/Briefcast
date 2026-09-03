@@ -2,9 +2,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBriefDate } from "@/lib/brief";
-import { countUnbriefedFollowedEpisodes, getFollowedBriefQueue, getFollowedShows } from "@/lib/queue";
+import {
+  countLatestFollowedNeedingBrief,
+  countUnbriefedFollowedEpisodes,
+  getFollowedBriefQueue,
+  getFollowedShows,
+} from "@/lib/queue";
 import { formatBriefLengthLabel } from "@/lib/brief-length";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
+import { AutoGenerateLatest } from "@/components/AutoGenerateLatest";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +18,11 @@ export default async function LibraryPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [follows, queue, unbriefed] = await Promise.all([
+  const [follows, queue, unbriefed, latestNeeding] = await Promise.all([
     getFollowedShows(user.id),
     getFollowedBriefQueue(user.id),
     countUnbriefedFollowedEpisodes(user.id),
+    countLatestFollowedNeedingBrief(user.id),
   ]);
 
   return (
@@ -23,7 +30,9 @@ export default async function LibraryPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl">Library</h1>
-          <p className="mt-2 text-muted">Shows you chose. Briefs appear here when those shows publish.</p>
+          <p className="mt-2 text-muted">
+            Shows you chose. New episodes are briefed automatically, newest first.
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {follows.length > 0 ? <RefreshLibraryButton /> : null}
@@ -38,18 +47,21 @@ export default async function LibraryPage() {
 
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
-        <p className="text-sm text-muted">Briefs for podcasts you follow, newest episode first.</p>
+        <p className="text-sm text-muted">
+          Written brief plus spoken recap for shows you follow, newest episode first.
+        </p>
+        <AutoGenerateLatest needed={latestNeeding > 0} />
         {unbriefed > 0 ? (
           <p className="text-sm text-muted">
             {unbriefed} followed episode{unbriefed === 1 ? "" : "s"} {unbriefed === 1 ? "has" : "have"} no
-            brief yet. New ones are written automatically.
+            spoken brief yet. The latest new episode is written automatically.
           </p>
         ) : null}
         {queue.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
             {follows.length === 0
               ? "Follow a podcast to start a queue. Briefcast does not pre-load sample briefs."
-              : "No briefs yet. New episodes from shows you follow are written automatically."}
+              : "No spoken briefs yet. The latest episode from each show is written automatically."}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -61,7 +73,9 @@ export default async function LibraryPage() {
                 >
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
                   <p className="font-medium">{episode.title}</p>
-                  <p className="text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
+                  <p className="text-sm text-muted">
+                    {formatBriefDate(episode.publishedAt)} · brief + spoken recap
+                  </p>
                 </Link>
               </li>
             ))}

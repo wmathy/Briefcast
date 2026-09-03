@@ -41,7 +41,13 @@ export function SearchShows() {
         briefLength: lengths[podcast.itunesId] ?? defaultLength,
       }),
     });
-    const data = (await response.json()) as { showId?: string; error?: string; warning?: string };
+    const data = (await response.json()) as {
+      showId?: string;
+      error?: string;
+      warning?: string;
+      generated?: number;
+      fetched?: number;
+    };
     setFollowingId(null);
     if (!response.ok || !data.showId) {
       setError(data.error ?? "Could not follow that show.");
@@ -114,7 +120,7 @@ export function SearchShows() {
                 onClick={() => follow(podcast)}
                 className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
               >
-                {followingId === podcast.itunesId ? "Following…" : "Follow"}
+                {followingId === podcast.itunesId ? "Following and writing brief…" : "Follow"}
               </button>
             </div>
           </li>

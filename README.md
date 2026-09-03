@@ -47,7 +47,7 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 ## Deploy on Vercel
 
-This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. A daily cron polls followed-show RSS and auto-generates briefs.
+This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief write that recap in-request. A daily production cron polls followed-show RSS as well (Vercel cron does not run on Preview).
 
 1. Import [github.com/wmathy/Briefcast](https://github.com/wmathy/Briefcast) in Vercel.
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.

@@ -21,5 +21,11 @@ describe("library homepage queue", () => {
     expect(source).toContain("formatBriefLengthLabel");
     expect(source).toContain("briefLength");
   });
+
+  it("auto-writes the latest brief instead of waiting for a Generate click", () => {
+    expect(source).toContain("AutoGenerateLatest");
+    expect(source).toContain("countLatestFollowedNeedingBrief");
+  });
 });
+
 

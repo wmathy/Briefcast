@@ -1,7 +1,11 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
+import {
+  FOLLOW_AUTO_BRIEF_LIMIT,
+  generateAutoBriefs,
+  syncShowAndPickAutoBriefs,
+} from "@/lib/auto-brief";
 import { upsertShowFromItunes } from "@/lib/podcasts";
 import { parseBriefLength } from "@/lib/brief-length";
 
@@ -45,16 +49,30 @@ export async function POST(request: Request) {
   });
 
   try {
-    const sync = await syncShowAndPickAutoBriefs(show.id, show.feedUrl);
-    if (sync.autoBriefIds.length > 0) {
-      after(async () => {
-        await generateAutoBriefs(sync.autoBriefIds, { userId: user.id });
-      });
-    }
+    const sync = await syncShowAndPickAutoBriefs(show.id, show.feedUrl, {
+      limit: FOLLOW_AUTO_BRIEF_LIMIT,
+    });
+    const generation = await generateAutoBriefs(sync.autoBriefIds, {
+      userId: user.id,
+      limit: FOLLOW_AUTO_BRIEF_LIMIT,
+    });
+    const warning =
+      generation.reason === "missing-xai-key"
+        ? "Followed. Add XAI_API_KEY to write the latest brief automatically."
+        : generation.errors[0];
+    return NextResponse.json({
+      showId: show.id,
+      briefLength,
+      fetched: sync.fetched,
+      created: sync.created,
+      generated: generation.generated,
+      generating: sync.autoBriefIds.length,
+      reason: generation.reason,
+      errors: generation.errors,
+      warning,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
     return NextResponse.json({ showId: show.id, briefLength, warning: message });
   }
-
-  return NextResponse.json({ showId: show.id, briefLength });
 }

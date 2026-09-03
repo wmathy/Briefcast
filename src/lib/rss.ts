@@ -49,7 +49,13 @@ function transcriptUrl(item: Record<string, unknown>): string | null {
   return null;
 }
 
-export async function fetchRssEpisodes(feedUrl: string, limit = 20): Promise<RssEpisode[]> {
+/** Omit limit (or pass null) to keep every item in the feed. */
+export function limitFeedItems<T>(items: T[], limit?: number | null): T[] {
+  if (limit == null || !Number.isFinite(limit) || limit < 0) return items;
+  return items.slice(0, limit);
+}
+
+export async function fetchRssEpisodes(feedUrl: string, limit?: number | null): Promise<RssEpisode[]> {
   const response = await fetch(feedUrl, {
     headers: {
       Accept: "application/rss+xml, application/xml, text/xml",
@@ -67,7 +73,7 @@ export async function fetchRssEpisodes(feedUrl: string, limit = 20): Promise<Rss
   };
   const items = parsed.rss?.channel?.item ?? [];
 
-  return items.slice(0, limit).map((item) => {
+  return limitFeedItems(items, limit).map((item) => {
     const title = asText(item.title) || asText(item["itunes:title"]) || "Untitled episode";
     const description = stripHtml(
       asText(item["content:encoded"]) || asText(item.description) || asText(item["itunes:summary"]),

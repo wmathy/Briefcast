@@ -1,6 +1,16 @@
 /** Cap generations per poll so a cron/request stays inside function time limits. */
 export const AUTO_BRIEF_LIMIT = 2;
 
+/** First follow writes the latest episode in the same request so the queue is not empty. */
+export const FOLLOW_AUTO_BRIEF_LIMIT = 1;
+
+export function episodeNeedsSpokenBrief(episode: {
+  brief?: unknown;
+  recapAudio?: unknown;
+}): boolean {
+  return !episode.brief || !episode.recapAudio;
+}
+
 export type CreatedEpisodeRef = {
   id: string;
   publishedAt: Date;

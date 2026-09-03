@@ -1,4 +1,4 @@
-import { after, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { generateAutoBriefs, syncShowAndPickAutoBriefs } from "@/lib/auto-brief";
@@ -27,16 +27,15 @@ export async function POST(
 
   try {
     const result = await syncShowAndPickAutoBriefs(follow.show.id, follow.show.feedUrl);
-    if (result.autoBriefIds.length > 0) {
-      after(async () => {
-        await generateAutoBriefs(result.autoBriefIds, { userId: user.id });
-      });
-    }
+    const generation = await generateAutoBriefs(result.autoBriefIds, { userId: user.id });
     return NextResponse.json({
       fetched: result.fetched,
       created: result.created,
       generating: result.autoBriefIds.length,
+      generated: generation.generated,
       canGenerate: hasXaiKey(),
+      reason: generation.reason,
+      errors: generation.errors,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "RSS refresh failed.";
