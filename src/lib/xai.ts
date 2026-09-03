@@ -169,7 +169,11 @@ async function sttChunks(file: Buffer, keyterms: string[]): Promise<SttResult | 
   let duration = 0;
   for (const [index, part] of parts.entries()) {
     const form = sttForm(keyterms);
-    form.append("file", new Blob([part], { type: "audio/mpeg" }), `episode-${index + 1}.mp3`);
+    form.append(
+      "file",
+      new Blob([Uint8Array.from(part)], { type: "audio/mpeg" }),
+      `episode-${index + 1}.mp3`,
+    );
     const result = await postStt(form);
     if (!result) return null;
     texts.push(result.text);
