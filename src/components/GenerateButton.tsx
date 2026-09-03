@@ -3,17 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 
 export function GenerateButton({
   episodeId,
   hasXaiKey,
   briefLength,
-  notesOnly,
+  retryUnavailable,
 }: {
   episodeId: string;
   hasXaiKey: boolean;
   briefLength?: BriefLength;
-  notesOnly?: boolean;
+  retryUnavailable?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(
@@ -30,10 +31,19 @@ export function GenerateButton({
           setPending(true);
           setError(null);
           const response = await fetch(`/api/episodes/${episodeId}/generate`, { method: "POST" });
-          const data = (await response.json()) as { error?: string };
+          const data = (await response.json()) as {
+            error?: string;
+            message?: string;
+            published?: boolean;
+          };
           setPending(false);
           if (!response.ok) {
             setError(data.error ?? "Generate failed.");
+            return;
+          }
+          if (data.published === false) {
+            setError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE);
+            router.refresh();
             return;
           }
           router.refresh();
@@ -42,16 +52,16 @@ export function GenerateButton({
       >
         {pending
           ? "Generating…"
-          : notesOnly
-            ? "Generate from full transcript"
+          : retryUnavailable
+            ? "Retry full transcript"
             : briefLength
               ? `Generate ${formatBriefLengthLabel(briefLength)}`
               : "Generate brief + voice"}
       </button>
-      {notesOnly ? (
+      {retryUnavailable ? (
         <p className="text-xs text-muted">
-          The current brief is notes-only. This rewrite uses the full episode transcript when one
-          can be fetched or transcribed.
+          A brief is published only from a complete episode transcript. This retries the publisher
+          transcript, captions, or Grok STT of the full audio file.
         </p>
       ) : briefLength ? (
         <p className="text-xs text-muted">

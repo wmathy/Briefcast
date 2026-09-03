@@ -34,7 +34,7 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
   const episodes = await fetchRssEpisodes(feedUrl, limit);
   const existing = await prisma.episode.findMany({
     where: { showId },
-    select: { id: true, guid: true, transcriptUrl: true, link: true, audioUrl: true },
+    select: { id: true, guid: true, transcriptUrl: true, link: true, audioUrl: true, durationSeconds: true },
   });
   const have = new Map(existing.map((episode) => [episode.guid, episode]));
   const toCreate = episodes.filter((episode) => !have.has(episode.guid));
@@ -44,7 +44,8 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
     return (
       (episode.transcriptUrl && episode.transcriptUrl !== row.transcriptUrl) ||
       (episode.link && episode.link !== row.link) ||
-      (episode.audioUrl && !row.audioUrl)
+      (episode.audioUrl && !row.audioUrl) ||
+      (episode.durationSeconds != null && episode.durationSeconds !== row.durationSeconds)
     );
   });
 
@@ -58,6 +59,7 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
         link: episode.link,
         audioUrl: episode.audioUrl,
         transcriptUrl: episode.transcriptUrl,
+        durationSeconds: episode.durationSeconds,
         description: episode.description,
         guest: episode.guest,
       })),
@@ -73,6 +75,7 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
         transcriptUrl: episode.transcriptUrl ?? row.transcriptUrl,
         link: episode.link ?? row.link,
         audioUrl: episode.audioUrl ?? row.audioUrl,
+        durationSeconds: episode.durationSeconds ?? row.durationSeconds,
       },
     });
   }

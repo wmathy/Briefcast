@@ -5,6 +5,10 @@ import { xaiTtsMp3 } from "@/lib/xai";
 import { TTS_SPEED, hasXaiKey, MissingXaiKeyError } from "@/lib/env";
 import { fetchRssEpisodes } from "@/lib/rss";
 import {
+  FULL_TRANSCRIPT_UNAVAILABLE,
+  isPublishedTranscriptBrief,
+} from "@/lib/transcript-complete";
+import {
   countWords,
   parseBriefLength,
   resolveBriefLength,
@@ -32,29 +36,65 @@ export async function resolveEpisodeBriefLength(
   });
 }
 
-export function shouldRewriteExistingBrief(input: {
+export function shouldPublishBrief(input: {
+  hasCompleteTranscript: boolean;
   existingSourceType?: string | null;
-  hasAudio: boolean;
-  nextSourceType: "transcript" | "shownotes";
   force: boolean;
-}): boolean {
-  if (input.force) return true;
-  if (!input.existingSourceType || !input.hasAudio) return true;
-  if (input.nextSourceType === "transcript") return true;
-  return false;
+}): "publish" | "keep-existing" | "unavailable" {
+  if (!input.hasCompleteTranscript) {
+    return isPublishedTranscriptBrief({ sourceType: input.existingSourceType })
+      ? "keep-existing"
+      : "unavailable";
+  }
+  if (input.existingSourceType === "transcript" && !input.force) {
+    return "keep-existing";
+  }
+  return "publish";
 }
 
-async function resolveRssTranscriptUrl(input: {
+export async function purgeNotesOnlyBriefs() {
+  const prisma = getPrisma();
+  const notes = await prisma.brief.findMany({
+    where: { sourceType: { not: "transcript" } },
+    select: { episodeId: true },
+  });
+  if (notes.length === 0) return 0;
+  const episodeIds = notes.map((row) => row.episodeId);
+  await prisma.$transaction([
+    prisma.recapAudio.deleteMany({ where: { episodeId: { in: episodeIds } } }),
+    prisma.brief.deleteMany({ where: { episodeId: { in: episodeIds } } }),
+  ]);
+  return notes.length;
+}
+
+async function resolveRssMeta(input: {
   storedUrl?: string | null;
+  storedDuration?: number | null;
+  storedAudio?: string | null;
   guid: string;
   feedUrl: string;
-}): Promise<string | null> {
-  if (input.storedUrl) return input.storedUrl;
+}): Promise<{ transcriptUrl: string | null; durationSeconds: number | null; audioUrl: string | null }> {
+  if (input.storedUrl && input.storedDuration && input.storedAudio) {
+    return {
+      transcriptUrl: input.storedUrl,
+      durationSeconds: input.storedDuration,
+      audioUrl: input.storedAudio,
+    };
+  }
   try {
     const feedItems = await fetchRssEpisodes(input.feedUrl);
-    return feedItems.find((item) => item.guid === input.guid)?.transcriptUrl ?? null;
+    const item = feedItems.find((row) => row.guid === input.guid);
+    return {
+      transcriptUrl: input.storedUrl ?? item?.transcriptUrl ?? null,
+      durationSeconds: input.storedDuration ?? item?.durationSeconds ?? null,
+      audioUrl: input.storedAudio ?? item?.audioUrl ?? null,
+    };
   } catch {
-    return null;
+    return {
+      transcriptUrl: input.storedUrl ?? null,
+      durationSeconds: input.storedDuration ?? null,
+      audioUrl: input.storedAudio ?? null,
+    };
   }
 }
 
@@ -78,37 +118,62 @@ export async function generateEpisodeBrief(
   const briefLength =
     options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
 
-  const transcriptUrl = await resolveRssTranscriptUrl({
+  const rss = await resolveRssMeta({
     storedUrl: episode.transcriptUrl,
+    storedDuration: episode.durationSeconds,
+    storedAudio: episode.audioUrl,
     guid: episode.guid,
     feedUrl: episode.show.feedUrl,
   });
 
   const source = await loadEpisodeSource({
     description: episode.description,
-    transcriptUrl,
+    transcriptUrl: rss.transcriptUrl,
     episodeLink: episode.link,
-    audioUrl: episode.audioUrl,
+    audioUrl: rss.audioUrl,
+    durationSeconds: rss.durationSeconds,
     showTitle: episode.show.title,
     episodeTitle: episode.title,
   });
 
   const force = options?.force ?? true;
-  if (
-    !shouldRewriteExistingBrief({
-      existingSourceType: episode.brief?.sourceType,
-      hasAudio: Boolean(episode.recapAudio),
-      nextSourceType: source.sourceType,
-      force,
-    })
-  ) {
+  const decision = shouldPublishBrief({
+    hasCompleteTranscript: Boolean(source),
+    existingSourceType: episode.brief?.sourceType,
+    force,
+  });
+
+  if (decision === "unavailable") {
+    if (episode.brief && !isPublishedTranscriptBrief(episode.brief)) {
+      await prisma.$transaction([
+        prisma.recapAudio.deleteMany({ where: { episodeId: episode.id } }),
+        prisma.brief.deleteMany({ where: { episodeId: episode.id } }),
+      ]);
+    }
     return {
       episodeId: episode.id,
-      sourceType: source.sourceType,
-      briefLength: parseBriefLength(episode.brief?.briefLength ?? briefLength),
-      sourceLimited: episode.brief?.sourceLimited ?? true,
-      spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
+      published: false,
       skipped: true,
+      reason: "no-full-transcript" as const,
+      message: FULL_TRANSCRIPT_UNAVAILABLE,
+      sourceType: null,
+      briefLength,
+      sourceLimited: false,
+      spokenWords: 0,
+    };
+  }
+
+  if (decision === "keep-existing" || !source) {
+    return {
+      episodeId: episode.id,
+      published: isPublishedTranscriptBrief(episode.brief),
+      skipped: true,
+      reason: isPublishedTranscriptBrief(episode.brief) ? ("already-published" as const) : ("no-full-transcript" as const),
+      message: isPublishedTranscriptBrief(episode.brief) ? null : FULL_TRANSCRIPT_UNAVAILABLE,
+      sourceType: episode.brief?.sourceType ?? null,
+      briefLength: parseBriefLength(episode.brief?.briefLength ?? briefLength),
+      sourceLimited: episode.brief?.sourceLimited ?? false,
+      spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
     };
   }
 
@@ -135,7 +200,7 @@ export async function generateEpisodeBrief(
         segmentsJson: JSON.stringify(brief.segments),
         takeawaysJson: JSON.stringify(brief.takeaways),
         spokenRecap: spoken,
-        sourceType: source.sourceType,
+        sourceType: "transcript",
         confidenceNote,
         guest,
         briefLength: brief.briefLength,
@@ -147,7 +212,7 @@ export async function generateEpisodeBrief(
         segmentsJson: JSON.stringify(brief.segments),
         takeawaysJson: JSON.stringify(brief.takeaways),
         spokenRecap: spoken,
-        sourceType: source.sourceType,
+        sourceType: "transcript",
         confidenceNote,
         guest,
         briefLength: brief.briefLength,
@@ -163,17 +228,22 @@ export async function generateEpisodeBrief(
       where: { id: episode.id },
       data: {
         guest,
-        transcriptUrl: transcriptUrl ?? episode.transcriptUrl,
+        transcriptUrl: rss.transcriptUrl ?? episode.transcriptUrl,
+        audioUrl: rss.audioUrl ?? episode.audioUrl,
+        durationSeconds: rss.durationSeconds ?? episode.durationSeconds,
       },
     }),
   ]);
 
   return {
     episodeId: episode.id,
-    sourceType: source.sourceType,
+    published: true,
+    skipped: false,
+    reason: null,
+    message: null,
+    sourceType: "transcript" as const,
     briefLength: brief.briefLength,
     sourceLimited: brief.sourceLimited,
     spokenWords: countWords(spoken),
-    skipped: false,
   };
 }

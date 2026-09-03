@@ -7,6 +7,7 @@ import { RefreshButton } from "@/components/RefreshButton";
 import { UnfollowButton } from "@/components/UnfollowButton";
 import { ShowBriefLengthControl } from "@/components/ShowBriefLengthControl";
 import { parseBriefLength } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export const dynamic = "force-dynamic";
 
@@ -76,8 +77,10 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
                 <span className="text-xs text-muted">{formatBriefDate(episode.publishedAt)}</span>
               </div>
               <p className="mt-1 text-sm text-muted">
-                {episode.brief ? "Brief ready" : "No brief yet"}
-                {episode.recapAudio ? " · spoken recap" : ""}
+                {isPublishedTranscriptBrief(episode.brief)
+                  ? "Brief ready"
+                  : FULL_TRANSCRIPT_UNAVAILABLE}
+                {isPublishedTranscriptBrief(episode.brief) && episode.recapAudio ? " · spoken recap" : ""}
               </p>
             </Link>
           </li>

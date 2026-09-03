@@ -5,8 +5,10 @@ export function episodeNeedsSpokenBrief(episode: {
   brief?: { sourceType?: string | null } | null;
   recapAudio?: unknown;
 }): boolean {
-  if (!episode.brief || !episode.recapAudio) return true;
-  return episode.brief.sourceType === "shownotes";
+  if (!episode.brief || episode.brief.sourceType !== "transcript" || !episode.recapAudio) {
+    return true;
+  }
+  return false;
 }
 
 export function takeAutoBriefBatch(ids: string[], limit = AUTO_BRIEF_LIMIT) {

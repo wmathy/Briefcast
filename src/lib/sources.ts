@@ -1,7 +1,7 @@
 import { hasXaiKey } from "@/lib/env";
 import { looksLikeTranscriptUrl } from "@/lib/html";
+import { isCompleteEpisodeTranscript } from "@/lib/transcript-complete";
 import {
-  SHOWNOTES_CONFIDENCE_NOTE,
   collectYoutubeSearchVideos,
   extractPageDiscoveries,
   extractTranscriptUrlsFromText,
@@ -17,7 +17,7 @@ import { xaiSttFromAudioUrl } from "@/lib/xai";
 
 export type EpisodeSource = {
   text: string;
-  sourceType: "transcript" | "shownotes";
+  sourceType: "transcript";
   confidenceNote: string | null;
 };
 
@@ -33,15 +33,6 @@ const BROWSER_UA =
 function trimSource(text: string): string {
   if (text.length <= MAX_SOURCE_CHARS) return text;
   return `${text.slice(0, MAX_SOURCE_CHARS)}\n\n[Source truncated for length.]`;
-}
-
-function shownotesSource(description: string): EpisodeSource {
-  const notes = description.trim();
-  return {
-    text: trimSource(notes || "No official show notes were available."),
-    sourceType: "shownotes",
-    confidenceNote: SHOWNOTES_CONFIDENCE_NOTE,
-  };
 }
 
 function transcriptSource(text: string): EpisodeSource {
@@ -107,22 +98,31 @@ export async function loadEpisodeSource(input: {
   transcriptUrl?: string | null;
   episodeLink?: string | null;
   audioUrl?: string | null;
+  durationSeconds?: number | null;
   showTitle?: string | null;
   episodeTitle?: string | null;
-}): Promise<EpisodeSource> {
+}): Promise<EpisodeSource | null> {
   const notes = input.description.trim();
   const tried = new Set<string>();
   let attempts = 0;
+
+  const accept = (text: string, coveredAudioSeconds?: number | null): EpisodeSource | null => {
+    const complete = isCompleteEpisodeTranscript({
+      text,
+      notes,
+      durationSeconds: input.durationSeconds,
+      coveredAudioSeconds,
+    });
+    return complete.ok ? transcriptSource(text) : null;
+  };
 
   const tryUrl = async (url: string, trust: "official" | "discovered"): Promise<EpisodeSource | null> => {
     if (!url || tried.has(url) || attempts >= MAX_FETCH_ATTEMPTS) return null;
     tried.add(url);
     attempts += 1;
     const transcript = await fetchTranscript(url);
-    if (isUsableTranscript(transcript, notes, trust)) {
-      return transcriptSource(transcript!);
-    }
-    return null;
+    if (!isUsableTranscript(transcript, notes, trust) || !transcript) return null;
+    return accept(transcript);
   };
 
   const tryCandidates = async (candidates: Candidate[]): Promise<EpisodeSource | null> => {
@@ -183,30 +183,29 @@ export async function loadEpisodeSource(input: {
     if (directories) return directories;
   }
 
-  const fromAudio = await transcribeEpisodeAudio(input);
-  if (fromAudio) return fromAudio;
-
-  return shownotesSource(notes);
+  return transcribeEpisodeAudio(input, accept);
 }
 
-async function transcribeEpisodeAudio(input: {
-  audioUrl?: string | null;
-  showTitle?: string | null;
-  episodeTitle?: string | null;
-}): Promise<EpisodeSource | null> {
+async function transcribeEpisodeAudio(
+  input: {
+    audioUrl?: string | null;
+    showTitle?: string | null;
+    episodeTitle?: string | null;
+    durationSeconds?: number | null;
+  },
+  accept: (text: string, coveredAudioSeconds?: number | null) => EpisodeSource | null,
+): Promise<EpisodeSource | null> {
   if (!input.audioUrl || !hasXaiKey()) return null;
   try {
-    const text = await xaiSttFromAudioUrl(
+    const result = await xaiSttFromAudioUrl(
       input.audioUrl,
       [input.showTitle, input.episodeTitle].filter((value): value is string => Boolean(value)),
     );
-    if (text && text.trim().length > 80) {
-      return transcriptSource(text);
-    }
+    if (!result) return null;
+    return accept(result.text, result.duration);
   } catch {
     return null;
   }
-  return null;
 }
 
 async function tryYoutubeCaptions(

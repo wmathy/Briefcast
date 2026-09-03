@@ -8,6 +8,7 @@ import { GenerateButton } from "@/components/GenerateButton";
 import { hasXaiKey } from "@/lib/env";
 import type { BriefSegment } from "@/lib/brief";
 import { formatBriefLengthLabel, parseBriefLength } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -25,23 +26,24 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
     where: { userId_showId: { userId: user.id, showId: episode.showId } },
   });
   const followLength = follow ? parseBriefLength(follow.briefLength) : null;
-  const storedBriefLength = episode.brief ? parseBriefLength(episode.brief.briefLength) : null;
+  const published = isPublishedTranscriptBrief(episode.brief);
+  const storedBriefLength = published && episode.brief ? parseBriefLength(episode.brief.briefLength) : null;
   const nextLength = followLength ?? storedBriefLength;
   const lengthChanged = Boolean(followLength && storedBriefLength && followLength !== storedBriefLength);
 
-  const segments = episode.brief
+  const segments = published && episode.brief
     ? (JSON.parse(episode.brief.segmentsJson) as BriefSegment[])
     : [];
-  const takeaways = episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
+  const takeaways = published && episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
 
-  const player = episode.recapAudio ? (
+  const player = published && episode.recapAudio ? (
     <AudioPlayer
       src={`/api/audio/${episode.id}`}
       title={`${episode.show.title} · ${episode.title}`}
     />
   ) : (
     <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-      No spoken recap stored yet. Generation uses Grok Voice (xAI TTS) only.
+      {FULL_TRANSCRIPT_UNAVAILABLE}. A spoken recap is written only after a full transcript exists.
     </div>
   );
 
@@ -58,7 +60,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         </p>
       ) : null}
 
-      {episode.brief ? (
+      {published && episode.brief ? (
         <BriefView
           showTitle={episode.show.title}
           episodeTitle={episode.title}
@@ -78,7 +80,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         <div className="space-y-6">
           <div className="space-y-3">
             <h1 className="font-display text-4xl">{episode.title}</h1>
-            <p className="text-muted">No brief yet. A new episode is written automatically; you can also retry here.</p>
+            <p className="text-muted">{FULL_TRANSCRIPT_UNAVAILABLE}. Check or Generate retries from the full episode audio.</p>
           </div>
           {player}
         </div>
@@ -88,7 +90,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         episodeId={episode.id}
         hasXaiKey={hasXaiKey()}
         briefLength={nextLength ?? undefined}
-        notesOnly={episode.brief?.sourceType === "shownotes"}
+        retryUnavailable={!published}
       />
     </div>
   );

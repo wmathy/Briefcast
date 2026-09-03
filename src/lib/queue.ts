@@ -5,7 +5,7 @@ export async function getFollowedBriefQueue(userId: string) {
   const prisma = getPrisma();
   return prisma.episode.findMany({
     where: {
-      brief: { isNot: null },
+      brief: { is: { sourceType: "transcript" } },
       recapAudio: { isNot: null },
       show: { follows: { some: { userId } } },
     },
@@ -18,7 +18,11 @@ export async function countUnbriefedFollowedEpisodes(userId: string) {
   const prisma = getPrisma();
   return prisma.episode.count({
     where: {
-      OR: [{ brief: { is: null } }, { recapAudio: { is: null } }],
+      OR: [
+        { brief: { is: null } },
+        { recapAudio: { is: null } },
+        { brief: { is: { sourceType: { not: "transcript" } } } },
+      ],
       show: { follows: { some: { userId } } },
     },
   });
@@ -37,7 +41,10 @@ export async function countLatestFollowedNeedingBrief(userId: string) {
       orderBy: { publishedAt: "desc" },
       include: { brief: true, recapAudio: true },
     });
-    if (latest && (!latest.brief || !latest.recapAudio)) {
+    if (
+      latest &&
+      (!latest.brief || latest.brief.sourceType !== "transcript" || !latest.recapAudio)
+    ) {
       needing += 1;
     }
   }

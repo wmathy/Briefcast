@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { extractGuest, stripHtml } from "@/lib/html";
+import { parseDurationSeconds } from "@/lib/transcript-complete";
 
 export type RssEpisode = {
   guid: string;
@@ -10,6 +11,7 @@ export type RssEpisode = {
   description: string;
   guest: string | null;
   transcriptUrl: string | null;
+  durationSeconds: number | null;
 };
 
 const parser = new XMLParser({
@@ -21,6 +23,10 @@ const parser = new XMLParser({
 
 function asText(value: unknown): string {
   if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (Array.isArray(value)) {
+    return value.map(asText).filter(Boolean).join("\n");
+  }
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     if (typeof record["#text"] === "string") return record["#text"];
@@ -35,6 +41,10 @@ function enclosureUrl(item: Record<string, unknown>): string | null {
     return enclosure["@_url"];
   }
   return null;
+}
+
+function itemDurationSeconds(item: Record<string, unknown>): number | null {
+  return parseDurationSeconds(item["itunes:duration"] ?? item.duration);
 }
 
 function transcriptUrl(item: Record<string, unknown>): string | null {
@@ -89,6 +99,7 @@ export async function fetchRssEpisodes(feedUrl: string, limit?: number | null): 
       description,
       guest: extractGuest(title, description),
       transcriptUrl: transcriptUrl(item),
+      durationSeconds: itemDurationSeconds(item),
     };
   });
 }

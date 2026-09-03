@@ -9,6 +9,7 @@ import {
   getFollowedShows,
 } from "@/lib/queue";
 import { formatBriefLengthLabel } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
 import { AutoGenerateLatest } from "@/components/AutoGenerateLatest";
 
@@ -54,14 +55,15 @@ export default async function LibraryPage() {
         {unbriefed > 0 ? (
           <p className="text-sm text-muted">
             {unbriefed} followed episode{unbriefed === 1 ? "" : "s"} {unbriefed === 1 ? "has" : "have"} no
-            spoken brief yet. The latest new episode is written automatically.
+            transcript brief yet. The latest episode is retried automatically when a full transcript
+            can be obtained.
           </p>
         ) : null}
         {queue.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
             {follows.length === 0
               ? "Follow a podcast to start a queue. Briefcast does not pre-load sample briefs."
-              : "No spoken briefs yet. The latest episode from each show is written automatically."}
+              : FULL_TRANSCRIPT_UNAVAILABLE}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -74,10 +76,7 @@ export default async function LibraryPage() {
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
                   <p className="font-medium">{episode.title}</p>
                   <p className="text-sm text-muted">
-                    {formatBriefDate(episode.publishedAt)} ·{" "}
-                    {episode.brief?.sourceType === "shownotes"
-                      ? "notes-only (not the full episode)"
-                      : "full-transcript brief + spoken recap"}
+                    {formatBriefDate(episode.publishedAt)} · full-transcript brief + spoken recap
                   </p>
                 </Link>
               </li>

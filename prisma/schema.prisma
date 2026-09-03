@@ -47,8 +47,9 @@ model Episode {
   title       String
   publishedAt DateTime
   link          String?
-  audioUrl      String?
-  transcriptUrl String?
+  audioUrl         String?
+  transcriptUrl    String?
+  durationSeconds  Int?
   description   String      @default("")
   guest         String?
   seeded      Boolean     @default(false)

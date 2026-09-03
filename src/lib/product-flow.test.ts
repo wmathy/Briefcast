@@ -41,17 +41,19 @@ describe("briefs come from the full episode transcript", () => {
   it("stores RSS transcript URLs and does not rescan only 40 feed items", () => {
     const generate = read("./generate.ts");
     expect(generate).toContain("episode.transcriptUrl");
-    expect(generate).toContain("audioUrl: episode.audioUrl");
+    expect(generate).toContain("storedAudio: episode.audioUrl");
+    expect(generate).toContain("audioUrl: rss.audioUrl");
     expect(generate).not.toContain("fetchRssEpisodes(episode.show.feedUrl, 40)");
     expect(read("./podcasts.ts")).toContain("transcriptUrl: episode.transcriptUrl");
   });
 
-  it("labels notes-only briefs instead of pretending they covered the episode", () => {
-    const view = read("../components/BriefView.tsx");
-    expect(view).toContain("Notes-only source");
-    expect(view).toContain("not the entire episode");
-    expect(view).toContain("full episode transcript");
-    expect(read("../app/library/page.tsx")).toContain("notes-only (not the full episode)");
+  it("does not publish notes-only briefs", () => {
+    expect(read("./generate.ts")).toContain("no-full-transcript");
+    expect(read("./generate.ts")).toContain("purgeNotesOnlyBriefs");
+    expect(read("./queue.ts")).toContain('sourceType: "transcript"');
+    expect(read("../app/episodes/[id]/page.tsx")).toContain("FULL_TRANSCRIPT_UNAVAILABLE");
+    expect(read("../app/library/page.tsx")).toContain("FULL_TRANSCRIPT_UNAVAILABLE");
+    expect(read("../app/library/page.tsx")).not.toContain("notes-only (not the full episode)");
   });
 });
 

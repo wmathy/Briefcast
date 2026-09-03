@@ -24,6 +24,12 @@ describe("refreshStatusLabel", () => {
     );
   });
 
+  it("does not pretend a brief was written when the transcript is missing", () => {
+    expect(refreshStatusLabel({ reason: "no-full-transcript", generated: 0 })).toBe(
+      "Full transcript not available yet — no brief",
+    );
+  });
+
   it("is honest when the xAI key is missing", () => {
     expect(refreshStatusLabel({ reason: "missing-xai-key", created: 3 })).toContain("XAI_API_KEY");
   });

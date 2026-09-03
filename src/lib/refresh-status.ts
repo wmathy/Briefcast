@@ -12,6 +12,9 @@ export type RefreshResult = {
 };
 
 export function refreshStatusLabel(data: RefreshResult): string {
+  if (data.reason === "no-full-transcript") {
+    return "Full transcript not available yet — no brief";
+  }
   if (data.reason === "missing-xai-key" || data.canGenerate === false) {
     return data.created
       ? `Added ${data.created} · add XAI_API_KEY to write briefs`

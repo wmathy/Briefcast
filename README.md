@@ -43,7 +43,7 @@ curl -X POST https://api.x.ai/v1/tts \
   --output recap.mp3
 ```
 
-Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. Generate uses the **full episode transcript**: stored or RSS `podcast:transcript`, official transcript pages (NPR `/transcripts/` and `text.npr.org`), public captions, then Grok Speech-to-Text of the episode audio. Show notes are a last-resort fallback and the UI labels those briefs notes-only. The same `XAI_API_KEY` covers chat, STT, and TTS.
+Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. A brief is published only from a **complete episode transcript** (RSS / official pages / captions, or Grok STT of the full audio file, chunked). Show notes are never published as a brief. The same `XAI_API_KEY` covers chat, STT, and TTS.
 
 ## Deploy on Vercel
 

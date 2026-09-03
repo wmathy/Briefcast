@@ -1,48 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { shouldRewriteExistingBrief } from "./generate";
+import { shouldPublishBrief } from "./generate";
 
-describe("shouldRewriteExistingBrief", () => {
-  it("always rewrites on manual Generate", () => {
+describe("shouldPublishBrief", () => {
+  it("never publishes when there is no complete transcript", () => {
     expect(
-      shouldRewriteExistingBrief({
+      shouldPublishBrief({
+        hasCompleteTranscript: false,
         existingSourceType: "shownotes",
-        hasAudio: true,
-        nextSourceType: "shownotes",
         force: true,
       }),
-    ).toBe(true);
-  });
-
-  it("rewrites a notes-only brief when a full transcript is now available", () => {
+    ).toBe("unavailable");
     expect(
-      shouldRewriteExistingBrief({
-        existingSourceType: "shownotes",
-        hasAudio: true,
-        nextSourceType: "transcript",
-        force: false,
-      }),
-    ).toBe(true);
-  });
-
-  it("does not rewrite an existing notes brief when the source is still notes", () => {
-    expect(
-      shouldRewriteExistingBrief({
-        existingSourceType: "shownotes",
-        hasAudio: true,
-        nextSourceType: "shownotes",
-        force: false,
-      }),
-    ).toBe(false);
-  });
-
-  it("writes when there is no stored brief or audio yet", () => {
-    expect(
-      shouldRewriteExistingBrief({
+      shouldPublishBrief({
+        hasCompleteTranscript: false,
         existingSourceType: null,
-        hasAudio: false,
-        nextSourceType: "shownotes",
+        force: true,
+      }),
+    ).toBe("unavailable");
+  });
+
+  it("keeps an existing transcript brief if a later attempt cannot fetch one", () => {
+    expect(
+      shouldPublishBrief({
+        hasCompleteTranscript: false,
+        existingSourceType: "transcript",
         force: false,
       }),
-    ).toBe(true);
+    ).toBe("keep-existing");
+  });
+
+  it("publishes when a complete transcript is available", () => {
+    expect(
+      shouldPublishBrief({
+        hasCompleteTranscript: true,
+        existingSourceType: "shownotes",
+        force: false,
+      }),
+    ).toBe("publish");
+    expect(
+      shouldPublishBrief({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        force: true,
+      }),
+    ).toBe("publish");
+  });
+
+  it("does not rewrite an existing transcript brief on auto-write", () => {
+    expect(
+      shouldPublishBrief({
+        hasCompleteTranscript: true,
+        existingSourceType: "transcript",
+        force: false,
+      }),
+    ).toBe("keep-existing");
   });
 });

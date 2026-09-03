@@ -1,6 +1,7 @@
 import { getPrisma } from "@/lib/db";
 import { hasXaiKey } from "@/lib/env";
-import { generateEpisodeBrief } from "@/lib/generate";
+import { generateEpisodeBrief, purgeNotesOnlyBriefs } from "@/lib/generate";
+import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import {
   AUTO_BRIEF_LIMIT,
   episodeNeedsSpokenBrief,
@@ -71,10 +72,13 @@ export async function generateAutoBriefs(
     }
     try {
       const result = await generateEpisodeBrief(id, { userId: options?.userId, force: false });
-      if (result.skipped) {
-        skipped += 1;
-      } else {
+      if (result.published) {
         generated += 1;
+      } else {
+        skipped += 1;
+        if (result.reason === "no-full-transcript") {
+          errors.push(`${episode.show.title}: ${FULL_TRANSCRIPT_UNAVAILABLE}`);
+        }
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Generate failed.";
@@ -82,7 +86,15 @@ export async function generateAutoBriefs(
     }
   }
 
-  return { attempted: episodeIds.length, generated, skipped, errors, reason: null };
+  return {
+    attempted: episodeIds.length,
+    generated,
+    skipped,
+    errors,
+    reason: generated === 0 && errors.some((item) => item.includes(FULL_TRANSCRIPT_UNAVAILABLE))
+      ? ("no-full-transcript" as const)
+      : null,
+  };
 }
 
 export async function collectFollowedAutoBriefIds(options?: {
@@ -131,6 +143,7 @@ export async function refreshFollowedBriefs(options?: {
   userId?: string;
   showId?: string;
 }) {
+  await purgeNotesOnlyBriefs();
   const poll = await collectFollowedAutoBriefIds(options);
   const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LIMIT);
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });

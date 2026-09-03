@@ -78,7 +78,7 @@ describe("buildBriefPrompt", () => {
     expect(long).toContain("20–30 min at 1x");
     expect(short).toContain("Do not invent");
     expect(long).toContain("Do not pad with filler");
-    expect(medium).toContain("official show notes only");
+    expect(medium).toContain("full episode transcript");
   });
 
   it("tells the model a transcript source is the full episode, not notes", () => {
