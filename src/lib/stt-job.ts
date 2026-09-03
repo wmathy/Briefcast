@@ -3,7 +3,7 @@ import { STT_CHUNK_BYTES } from "@/lib/audio-chunks";
 import { fetchAudioSlice, sttBufferChunk, xaiSttFromAudioUrl, type SttResult } from "@/lib/xai";
 
 export const STT_CHUNKS_PER_TURN = 1;
-const LOCK_STALE_MS = 8 * 60 * 1000;
+const LOCK_STALE_MS = 4 * 60 * 1000;
 
 export class TranscriptInProgressError extends Error {
   constructor(
@@ -86,9 +86,8 @@ export async function transcribeEpisodeDurable(input: {
 
   try {
     const next = await advanceJob(job, input.keyterms, input.durationSeconds);
-    if (next.status === "complete") {
-      return asResult(next);
-    }
+    // Even the last chunk returns in-progress so this 300s turn does not also
+    // write the brief and run TTS. The next continue reads the completed job.
     throw new TranscriptInProgressError({
       chunks: next.chunkCount,
       nextByte: next.nextByte,

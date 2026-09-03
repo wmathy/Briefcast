@@ -203,6 +203,27 @@ describe("loadEpisodeSource", () => {
     expect(source.confidenceNote).toBeNull();
   });
 
+  it("skips YouTube discovery when a long episode already has audio for STT", async () => {
+    process.env.XAI_API_KEY = "test-key";
+    const calls = mockFetch((url) => {
+      if (url.includes("api.x.ai/v1/stt")) {
+        return jsonResponse({ text: spokenTranscript, duration: 180 });
+      }
+      return textResponse("should-not-fetch", 200);
+    });
+
+    await loadEpisodeSource({
+      description: `${notes}\nWatch: https://www.youtube.com/watch?v=33Fc_mLqY90`,
+      audioUrl: "https://example.com/jre.mp3",
+      durationSeconds: 189 * 60,
+      showTitle: "The Joe Rogan Experience",
+      episodeTitle: "#2545 - Jesse Michels",
+    });
+
+    expect(calls.some((url) => url.includes("youtube"))).toBe(false);
+    expect(calls.some((url) => url.includes("jre.mp3") || url.includes("api.x.ai"))).toBe(true);
+  });
+
   it("uses a YouTube watch URL from the description without searching", async () => {
     mockFetch((url) => {
       if (url === "https://youtube-transcript.ai/transcript/33Fc_mLqY90.txt") {

@@ -164,6 +164,15 @@ export async function loadEpisodeSource(input: {
   ]);
   if (firstPass) return firstPass;
 
+  // Long (or unknown-length) files with audio go straight to chunked STT.
+  // YouTube / page / directory discovery can burn the 300s budget first.
+  const skipSlowDiscovery = Boolean(
+    input.audioUrl && ((input.durationSeconds ?? 0) >= 15 * 60 || input.durationSeconds == null),
+  );
+  if (skipSlowDiscovery) {
+    return transcribeEpisodeAudio(input, accept);
+  }
+
   for (const videoId of extractYoutubeVideoIds(input.description)) {
     const hit = await tryYoutubeCaptions(videoId, tryUrl);
     if (hit) return hit;
@@ -185,13 +194,11 @@ export async function loadEpisodeSource(input: {
   }
 
   const alreadyTriedOfficialNpr = fromNpr.length > 0;
-  const skipSlowDiscovery = Boolean(input.audioUrl && (input.durationSeconds ?? 0) >= 20 * 60);
   if (
     !alreadyTriedOfficialNpr &&
     input.showTitle &&
     input.episodeTitle &&
-    attempts < MAX_FETCH_ATTEMPTS &&
-    !skipSlowDiscovery
+    attempts < MAX_FETCH_ATTEMPTS
   ) {
     const videoId = await searchYoutubeVideoId(input.showTitle, input.episodeTitle);
     if (videoId) {

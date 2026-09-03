@@ -20,6 +20,8 @@ describe("refreshStatusLabel", () => {
     expect(refreshStatusLabel({ reason: "transcript-in-progress" })).toBe("Transcribing…");
     expect(refreshShouldContinue(504, { generated: 0 })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, generated: 0, errors: ["xAI TTS timed out"] })).toBe(true);
+    expect(refreshHasMore({ reason: "audio-pending", generated: 0, remaining: 1 })).toBe(true);
+    expect(refreshStatusLabel({ reason: "audio-pending" })).toBe("Writing audio…");
   });
 
   it("surfaces a failed write instead of silent skip", () => {

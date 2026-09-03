@@ -48,6 +48,7 @@ export async function generateAutoBriefs(
   let generated = 0;
   let skipped = 0;
   let inProgress = 0;
+  let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   const errors: string[] = [];
 
   for (const id of episodeIds) {
@@ -65,8 +66,9 @@ export async function generateAutoBriefs(
     }
     try {
       const result = await generateEpisodeBrief(id, { userId: options?.userId, force: recapNeedsRewrite(episode) });
-      if (result.reason === "transcript-in-progress") {
+      if (result.reason === "transcript-in-progress" || result.reason === "audio-pending") {
         inProgress += 1;
+        progressReason = result.reason;
         continue;
       }
       if (result.published) {
@@ -90,11 +92,10 @@ export async function generateAutoBriefs(
     inProgress,
     errors,
     reason:
-      inProgress > 0
-        ? ("transcript-in-progress" as const)
-        : generated === 0 && errors.some((item) => item.includes(FULL_TRANSCRIPT_UNAVAILABLE))
-          ? ("no-full-transcript" as const)
-          : null,
+      progressReason ??
+      (generated === 0 && errors.some((item) => item.includes(FULL_TRANSCRIPT_UNAVAILABLE))
+        ? ("no-full-transcript" as const)
+        : null),
   };
 }
 

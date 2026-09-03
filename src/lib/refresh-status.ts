@@ -15,6 +15,9 @@ export function refreshStatusLabel(data: RefreshResult): string {
   if (data.reason === "transcript-in-progress") {
     return "Transcribing…";
   }
+  if (data.reason === "audio-pending") {
+    return "Writing audio…";
+  }
   if (data.reason === "no-full-transcript") {
     return "No full transcript yet";
   }
@@ -47,7 +50,7 @@ export function refreshStatusLabel(data: RefreshResult): string {
 
 export function refreshHasMore(data: RefreshResult): boolean {
   if (data.error || data.reason === "missing-xai-key") return false;
-  if (data.reason === "transcript-in-progress") return true;
+  if (data.reason === "transcript-in-progress" || data.reason === "audio-pending") return true;
   return Boolean(data.remaining && data.remaining > 0);
 }
 

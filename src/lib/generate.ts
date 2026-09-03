@@ -348,13 +348,17 @@ export async function generateEpisodeBrief(
     await prisma.recapAudio.deleteMany({ where: { episodeId: episode.id } });
   }
 
-  return persistRecapAudioAfterTts({
+  return {
     episodeId: episode.id,
-    spoken,
+    published: false,
+    skipped: true,
+    reason: "audio-pending" as const,
+    message: "Writing audio…",
+    sourceType: "transcript" as const,
     briefLength: brief.briefLength,
     sourceLimited: brief.sourceLimited,
-    sourceType: "transcript",
-  });
+    spokenWords: countWords(spoken),
+  };
 }
 
 async function persistRecapAudioAfterTts(input: {

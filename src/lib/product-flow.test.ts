@@ -61,11 +61,12 @@ describe("briefs come from the full episode transcript", () => {
     const generate = read("./generate.ts");
     const write = generate.indexOf("const brief = await writeBriefFromSource");
     const upsert = generate.indexOf("prisma.brief.upsert", write);
-    const tts = generate.indexOf("return persistRecapAudioAfterTts", upsert);
+    const pending = generate.indexOf("audio-pending", upsert);
     expect(write).toBeGreaterThan(-1);
     expect(upsert).toBeGreaterThan(write);
-    expect(tts).toBeGreaterThan(upsert);
+    expect(pending).toBeGreaterThan(upsert);
     expect(generate).toContain('return "tts-only"');
+    expect(generate).toContain('reason: "audio-pending"');
     expect(read("./sources.ts")).toContain("briefPromptSource");
     expect(read("./brief.ts")).toContain("briefPromptSource(input.source.text)");
     expect(read("./auto-brief.ts")).toContain("stillNeeded");
