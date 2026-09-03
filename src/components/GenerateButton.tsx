@@ -2,8 +2,18 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
-import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
+import type { BriefLength } from "@/lib/brief-length";
+import {
+  FULL_TRANSCRIPT_UNAVAILABLE,
+  FULL_TRANSCRIPT_UNAVAILABLE_SHORT,
+} from "@/lib/transcript-complete";
+
+function displayError(message: string): string {
+  if (message === FULL_TRANSCRIPT_UNAVAILABLE || message.includes("Full transcript not available")) {
+    return FULL_TRANSCRIPT_UNAVAILABLE_SHORT;
+  }
+  return message;
+}
 
 export function GenerateButton({
   episodeId,
@@ -17,9 +27,7 @@ export function GenerateButton({
   retryUnavailable?: boolean;
 }) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(
-    hasXaiKey ? null : "Add XAI_API_KEY to generate written briefs and spoken recaps.",
-  );
+  const [error, setError] = useState<string | null>(hasXaiKey ? null : "Add XAI_API_KEY.");
   const [pending, setPending] = useState(false);
 
   return (
@@ -38,11 +46,11 @@ export function GenerateButton({
           };
           setPending(false);
           if (!response.ok) {
-            setError(data.error ?? "Generate failed.");
+            setError(displayError(data.error ?? "Generate failed."));
             return;
           }
           if (data.published === false) {
-            setError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE);
+            setError(displayError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE));
             router.refresh();
             return;
           }
@@ -50,24 +58,8 @@ export function GenerateButton({
         }}
         className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
       >
-        {pending
-          ? "Generating…"
-          : retryUnavailable
-            ? "Retry full transcript"
-            : briefLength
-              ? `Generate ${formatBriefLengthLabel(briefLength)}`
-              : "Generate brief + voice"}
+        {pending ? "Working…" : retryUnavailable ? "Retry" : briefLength ? "Rewrite" : "Generate"}
       </button>
-      {retryUnavailable ? (
-        <p className="text-xs text-muted">
-          A brief is published only from a complete episode transcript. This retries the publisher
-          transcript, captions, or Grok STT of the full audio file.
-        </p>
-      ) : briefLength ? (
-        <p className="text-xs text-muted">
-          Spoken length is measured at 1x. The player can still default to 1.2× playback.
-        </p>
-      ) : null}
       {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>
   );

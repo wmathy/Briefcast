@@ -13,20 +13,20 @@ export type RefreshResult = {
 
 export function refreshStatusLabel(data: RefreshResult): string {
   if (data.reason === "no-full-transcript") {
-    return "Full transcript not available yet — no brief";
+    return "No full transcript yet";
   }
   if (data.reason === "missing-xai-key" || data.canGenerate === false) {
     return data.created
-      ? `Added ${data.created} · add XAI_API_KEY to write briefs`
-      : "New episode found · add XAI_API_KEY";
+      ? `Added ${data.created} · add XAI_API_KEY`
+      : "Add XAI_API_KEY";
   }
   if (data.errors && data.errors.length > 0 && !data.generated) {
     return data.errors[0] ?? "Brief failed";
   }
   if (data.generated && data.generated > 0) {
-    const wrote = `Wrote ${data.generated} brief${data.generated === 1 ? "" : "s"}`;
+    const wrote = `Wrote ${data.generated}`;
     if (data.remaining && data.remaining > 0) {
-      return `${wrote}. ${data.remaining} more still need a recap.`;
+      return `${wrote} · ${data.remaining} left`;
     }
     if (data.created) {
       return `Added ${data.created} · ${wrote.toLowerCase()}`;

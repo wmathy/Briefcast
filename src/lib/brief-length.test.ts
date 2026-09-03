@@ -5,6 +5,7 @@ import {
   countWords,
   estimateSpokenMinutesAt1x,
   formatBriefLengthLabel,
+  formatBriefLengthShort,
   isSourceTooThin,
   maxBriefLength,
   mergeConfidenceNote,
@@ -109,5 +110,6 @@ describe("labels", () => {
     expect(formatBriefLengthLabel("short")).toBe("Short · 3–5 min at 1x");
     expect(formatBriefLengthLabel("medium")).toBe("Medium · 8–12 min at 1x");
     expect(formatBriefLengthLabel("long")).toBe("Long · 20–30 min at 1x");
+    expect(formatBriefLengthShort("medium")).toBe("Medium");
   });
 });

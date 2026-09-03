@@ -1,66 +1,57 @@
 import type { ReactNode } from "react";
 import type { BriefSegment } from "@/lib/brief";
 import { formatBriefDate } from "@/lib/brief";
-import { formatBriefLengthLabel, type BriefLength } from "@/lib/brief-length";
+import { formatBriefLengthShort, type BriefLength } from "@/lib/brief-length";
+import { formatEpisodeClock } from "@/lib/format-time";
 
 export function BriefView({
-  showTitle,
   episodeTitle,
   guest,
   publishedAt,
+  durationSeconds,
   link,
   overview,
   segments,
   takeaways,
-  sourceType,
-  confidenceNote,
   briefLength,
   sourceLimited,
   player,
 }: {
-  showTitle: string;
   episodeTitle: string;
   guest: string | null;
   publishedAt: Date;
+  durationSeconds?: number | null;
   link: string | null;
   overview: string;
   segments: BriefSegment[];
   takeaways: string[];
-  sourceType: string;
-  confidenceNote: string | null;
   briefLength?: BriefLength | string | null;
   sourceLimited?: boolean;
   player?: ReactNode;
 }) {
+  const meta = [
+    guest,
+    formatBriefDate(publishedAt),
+    formatEpisodeClock(durationSeconds),
+    briefLength ? formatBriefLengthShort(briefLength) : null,
+  ].filter(Boolean);
+
   return (
-    <article className="space-y-8">
-      <header className="space-y-2 border-b border-line pb-6">
-        <p className="text-xs uppercase tracking-[0.2em] text-accent">{showTitle}</p>
+    <article className="space-y-6">
+      <header className="space-y-2 border-b border-line pb-5">
         <h1 className="font-display text-3xl leading-tight text-ink sm:text-4xl">{episodeTitle}</h1>
-        <p className="text-sm text-muted">
-          {guest ? `Guest: ${guest}` : "Guest: not named in source"} · {formatBriefDate(publishedAt)}
-          {briefLength ? ` · ${formatBriefLengthLabel(briefLength)}` : ""}
-        </p>
+        <p className="text-sm text-muted">{meta.join(" · ")}</p>
         {link ? (
           <a className="text-sm text-accent underline-offset-2 hover:underline" href={link} target="_blank" rel="noreferrer">
-            Official episode link
+            Episode
           </a>
         ) : null}
       </header>
 
       {player}
 
-      {sourceType === "shownotes" ? (
-        <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
-          Notes-only source. A full episode transcript was not available, so this brief covers the
-          official show notes — not the entire episode. Generate again after a transcript is
-          available to rewrite from the full episode.
-        </p>
-      ) : sourceLimited ? (
-        <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
-          Source was limited for this length. The brief stays faithful to the available transcript
-          and does not invent extra material.
-        </p>
+      {sourceLimited ? (
+        <p className="text-sm text-muted">Source was limited.</p>
       ) : null}
 
       <section>
@@ -96,11 +87,6 @@ export function BriefView({
           ))}
         </ul>
       </section>
-
-      <p className="text-xs text-muted">
-        Source: {sourceType === "transcript" ? "full episode transcript" : "official show notes only (not the episode)"}
-        {confidenceNote ? ` · ${confidenceNote}` : ""}
-      </p>
     </article>
   );
 }

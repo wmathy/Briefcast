@@ -8,7 +8,7 @@ import { refreshHasMore, refreshStatusLabel, type RefreshResult } from "@/lib/re
 export function AutoGenerateLatest({ needed }: { needed: boolean }) {
   const router = useRouter();
   const started = useRef(false);
-  const [status, setStatus] = useState<string | null>(needed ? "Writing the latest brief…" : null);
+  const [status, setStatus] = useState<string | null>(needed ? "Writing…" : null);
 
   useEffect(() => {
     if (!needed || started.current) return;
@@ -22,7 +22,7 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
         const data = (await response.json()) as RefreshResult;
         if (cancelled) return;
         if (!response.ok) {
-          setStatus(data.error ?? "Could not write the latest brief.");
+          setStatus(data.error ?? "Could not write.");
           return;
         }
         setStatus(refreshStatusLabel(data));
@@ -33,7 +33,7 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
       }
       if (!cancelled) router.refresh();
     })().catch(() => {
-      if (!cancelled) setStatus("Could not write the latest brief.");
+      if (!cancelled) setStatus("Could not write.");
     });
 
     return () => {

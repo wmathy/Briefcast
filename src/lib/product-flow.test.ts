@@ -33,7 +33,8 @@ describe("show page lists the RSS catalog", () => {
   it("syncs the full feed and renders an episode count", () => {
     expect(read("./podcasts.ts")).toContain("fetchRssEpisodes(feedUrl, limit)");
     expect(read("./podcasts.ts")).not.toContain("limit = 20");
-    expect(read("../app/shows/[id]/page.tsx")).toContain("from the show’s RSS feed");
+    expect(read("../app/shows/[id]/page.tsx")).toContain("Episodes");
+    expect(read("../app/shows/[id]/page.tsx")).toContain("show.episodes.map");
   });
 });
 

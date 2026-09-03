@@ -2,6 +2,7 @@ import { countWords } from "@/lib/brief-length";
 import { looksLikeSpokenTranscript } from "@/lib/transcripts";
 
 export const FULL_TRANSCRIPT_UNAVAILABLE = "Full transcript not available yet — no brief";
+export const FULL_TRANSCRIPT_UNAVAILABLE_SHORT = "No full transcript yet";
 
 /** Floor vs episode duration. Below this, the text cannot cover the audio. */
 export const COMPLETE_WPM_FLOOR = 100;

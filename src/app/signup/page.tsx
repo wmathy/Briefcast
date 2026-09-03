@@ -8,7 +8,7 @@ export default async function SignupPage() {
   return (
     <div className="mx-auto max-w-md space-y-6">
       <h1 className="font-display text-4xl">Sign up</h1>
-      <p className="text-muted">Email and password. We do not send mail in the MVP.</p>
+      <p className="text-sm text-muted">No email verification.</p>
       <AuthForm mode="signup" />
       <p className="text-sm text-muted">
         Already have an account?{" "}

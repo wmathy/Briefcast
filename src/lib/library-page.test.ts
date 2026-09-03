@@ -18,7 +18,7 @@ describe("library homepage queue", () => {
   });
 
   it("shows each follow's brief length", () => {
-    expect(source).toContain("formatBriefLengthLabel");
+    expect(source).toContain("formatBriefLengthShort");
     expect(source).toContain("briefLength");
   });
 

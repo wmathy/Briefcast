@@ -13,11 +13,7 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
 
   if (!enabled) {
     return (
-      <p className="rounded-2xl border border-line bg-bg-card p-4 text-sm leading-6 text-muted">
-        Password recovery is not enabled yet. Set <code className="text-ink">RECOVERY_SECRET</code>{" "}
-        on Vercel for Production and Preview, then Redeploy. After that, this page can reset an
-        existing account without sending email.
-      </p>
+      <p className="text-sm text-muted">Recovery isn’t enabled.</p>
     );
   }
 
@@ -43,10 +39,6 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
         router.refresh();
       }}
     >
-      <p className="text-sm leading-6 text-muted">
-        Enter the account email, a new password, and the recovery secret from your Vercel env.
-        Briefcast does not send reset mail.
-      </p>
       <label className="block space-y-1.5">
         <span className="text-sm text-muted">Email</span>
         <input

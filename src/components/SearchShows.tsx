@@ -58,12 +58,12 @@ export function SearchShows() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <form onSubmit={search} className="flex flex-col gap-3 sm:flex-row">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search iTunes for a podcast you follow…"
+          placeholder="Search podcasts"
           className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2.5 outline-none ring-accent focus:ring-2"
         />
         <button
@@ -74,15 +74,8 @@ export function SearchShows() {
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
+      <BriefLengthPicker value={defaultLength} onChange={setDefaultLength} name="discover-default-length" />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
-      <div className="space-y-2 rounded-2xl border border-line bg-bg-card p-4">
-        <p className="text-xs uppercase tracking-[0.18em] text-muted">New follow length</p>
-        <BriefLengthPicker value={defaultLength} onChange={setDefaultLength} name="discover-default-length" />
-        <p className="text-sm text-muted">
-          Each show can use a different length. You can change it later on the show page. Existing
-          briefs rewrite only when you Generate again.
-        </p>
-      </div>
       <ul className="space-y-3">
         {results.map((podcast) => (
           <li
@@ -120,7 +113,7 @@ export function SearchShows() {
                 onClick={() => follow(podcast)}
                 className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
               >
-                {followingId === podcast.itunesId ? "Following and writing brief…" : "Follow"}
+                {followingId === podcast.itunesId ? "Following…" : "Follow"}
               </button>
             </div>
           </li>

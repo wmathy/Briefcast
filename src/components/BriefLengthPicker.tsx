@@ -26,6 +26,7 @@ export function BriefLengthPicker({
             type="button"
             role="radio"
             name={name}
+            title={spec.durationLabel}
             aria-checked={selected}
             disabled={disabled}
             onClick={() => onChange(length)}
@@ -33,10 +34,7 @@ export function BriefLengthPicker({
               selected ? "bg-accent text-bg" : "border border-line text-muted hover:border-accent"
             } disabled:opacity-60`}
           >
-            <span className="font-medium">{spec.label}</span>
-            <span className={`ml-1 text-xs ${selected ? "text-bg/80" : "text-muted"}`}>
-              {spec.durationLabel}
-            </span>
+            {spec.label}
           </button>
         );
       })}

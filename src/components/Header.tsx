@@ -6,11 +6,8 @@ export function Header({ user }: { user: SessionUser | null }) {
   return (
     <header className="sticky top-0 z-20 border-b border-line/80 bg-bg/85 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-        <Link href={user ? "/library" : "/"} className="flex items-baseline gap-2">
-          <span className="font-display text-xl tracking-tight text-ink">Briefcast</span>
-          <span className="hidden text-[11px] uppercase tracking-[0.18em] text-muted sm:inline">
-            written + spoken
-          </span>
+        <Link href={user ? "/library" : "/"} className="font-display text-xl tracking-tight text-ink">
+          Briefcast
         </Link>
         {user ? (
           <nav className="flex items-center gap-3 text-sm text-muted">

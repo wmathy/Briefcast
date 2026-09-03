@@ -121,6 +121,10 @@ export function formatBriefLengthLabel(length: unknown): string {
   return `${spec.label} · ${spec.durationLabel}`;
 }
 
+export function formatBriefLengthShort(length: unknown): string {
+  return BRIEF_LENGTH_SPECS[parseBriefLength(length)].label;
+}
+
 export function mergeConfidenceNote(
   sourceNote: string | null | undefined,
   length: BriefLength,

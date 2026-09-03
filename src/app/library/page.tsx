@@ -8,8 +8,8 @@ import {
   getFollowedBriefQueue,
   getFollowedShows,
 } from "@/lib/queue";
-import { formatBriefLengthLabel } from "@/lib/brief-length";
-import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
+import { formatBriefLengthShort } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT } from "@/lib/transcript-complete";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
 import { AutoGenerateLatest } from "@/components/AutoGenerateLatest";
 
@@ -27,14 +27,9 @@ export default async function LibraryPage() {
   ]);
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl">Library</h1>
-          <p className="mt-2 text-muted">
-            Shows you chose. New episodes are briefed automatically, newest first.
-          </p>
-        </div>
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-4xl">Library</h1>
         <div className="flex flex-wrap items-center gap-3">
           {follows.length > 0 ? <RefreshLibraryButton /> : null}
           <Link
@@ -47,23 +42,18 @@ export default async function LibraryPage() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
-        <p className="text-sm text-muted">
-          Written brief plus spoken recap for shows you follow, newest episode first.
-        </p>
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
+          {unbriefed > 0 ? (
+            <p className="text-xs text-muted">
+              {unbriefed} waiting
+            </p>
+          ) : null}
+        </div>
         <AutoGenerateLatest needed={latestNeeding > 0} />
-        {unbriefed > 0 ? (
-          <p className="text-sm text-muted">
-            {unbriefed} followed episode{unbriefed === 1 ? "" : "s"} {unbriefed === 1 ? "has" : "have"} no
-            transcript brief yet. The latest episode is retried automatically when a full transcript
-            can be obtained.
-          </p>
-        ) : null}
         {queue.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
-            {follows.length === 0
-              ? "Follow a podcast to start a queue. Briefcast does not pre-load sample briefs."
-              : FULL_TRANSCRIPT_UNAVAILABLE}
+          <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-sm text-muted">
+            {follows.length === 0 ? "Follow a show" : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
           </div>
         ) : (
           <ul className="space-y-3">
@@ -75,9 +65,7 @@ export default async function LibraryPage() {
                 >
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
                   <p className="font-medium">{episode.title}</p>
-                  <p className="text-sm text-muted">
-                    {formatBriefDate(episode.publishedAt)} · full-transcript brief + spoken recap
-                  </p>
+                  <p className="text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
                 </Link>
               </li>
             ))}
@@ -88,8 +76,8 @@ export default async function LibraryPage() {
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Following</h2>
         {follows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
-            You are not following any shows yet. Search iTunes and follow the ones you already listen to.
+          <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-sm text-muted">
+            Nothing here
           </div>
         ) : (
           <ul className="grid gap-4 sm:grid-cols-2">
@@ -108,10 +96,10 @@ export default async function LibraryPage() {
                   <div className="min-w-0">
                     <p className="truncate font-medium">{show.title}</p>
                     <p className="truncate text-sm text-muted">{show.artist}</p>
-                    <p className="mt-1 truncate text-xs text-muted">{formatBriefLengthLabel(briefLength)}</p>
-                    {show.episodes[0] ? (
-                      <p className="truncate text-xs text-muted">Latest: {show.episodes[0].title}</p>
-                    ) : null}
+                    <p className="mt-1 truncate text-xs text-muted">
+                      {formatBriefLengthShort(briefLength)}
+                      {show.episodes[0] ? ` · ${show.episodes[0].title}` : ""}
+                    </p>
                   </div>
                 </Link>
               </li>

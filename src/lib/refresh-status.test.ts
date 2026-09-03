@@ -4,14 +4,14 @@ import { refreshHasMore, refreshStatusLabel } from "./refresh-status";
 describe("refreshStatusLabel", () => {
   it("reports a finished auto-brief, not a pending background write", () => {
     expect(refreshStatusLabel({ generated: 1, created: 1, canGenerate: true })).toBe(
-      "Added 1 · wrote 1 brief",
+      "Added 1 · wrote 1",
     );
-    expect(refreshStatusLabel({ generated: 2, canGenerate: true })).toBe("Wrote 2 briefs");
+    expect(refreshStatusLabel({ generated: 2, canGenerate: true })).toBe("Wrote 2");
   });
 
   it("says when more shows still need a recap instead of pretending it is done", () => {
     expect(refreshStatusLabel({ generated: 3, remaining: 2, canGenerate: true })).toBe(
-      "Wrote 3 briefs. 2 more still need a recap.",
+      "Wrote 3 · 2 left",
     );
     expect(refreshHasMore({ remaining: 2, generated: 3 })).toBe(true);
     expect(refreshHasMore({ remaining: 0, generated: 3 })).toBe(false);
@@ -26,7 +26,7 @@ describe("refreshStatusLabel", () => {
 
   it("does not pretend a brief was written when the transcript is missing", () => {
     expect(refreshStatusLabel({ reason: "no-full-transcript", generated: 0 })).toBe(
-      "Full transcript not available yet — no brief",
+      "No full transcript yet",
     );
   });
 

@@ -51,6 +51,46 @@ input {
   font: inherit;
 }
 
+.audio-scrubber {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--accent) var(--progress, 0%),
+    var(--line) var(--progress, 0%)
+  );
+  cursor: pointer;
+}
+
+.audio-scrubber:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.audio-scrubber::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 0;
+}
+
+.audio-scrubber::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
+  border: 0;
+}
+
+.audio-scrubber::-moz-range-track {
+  background: transparent;
+}
+
 .grain {
   position: fixed;
   inset: 0;

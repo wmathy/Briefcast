@@ -6,7 +6,7 @@ import { refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
 
 export function RefreshLibraryButton() {
   const router = useRouter();
-  const [label, setLabel] = useState("Check for new episodes");
+  const [label, setLabel] = useState("Check");
   const [pending, setPending] = useState(false);
 
   return (
@@ -27,7 +27,7 @@ export function RefreshLibraryButton() {
       }}
       className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
     >
-      {pending ? "Checking and writing brief…" : label}
+      {pending ? "Checking…" : label}
     </button>
   );
 }

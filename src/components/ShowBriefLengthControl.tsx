@@ -33,7 +33,7 @@ export function ShowBriefLengthControl({
     setPending(false);
     if (!response.ok) {
       setLength(previous);
-      setError(data.error ?? "Could not save brief length.");
+      setError(data.error ?? "Could not save.");
       return;
     }
     setLength(parseBriefLength(data.briefLength ?? next));
@@ -42,15 +42,10 @@ export function ShowBriefLengthControl({
   }
 
   return (
-    <div className="space-y-2 rounded-2xl border border-line bg-bg-card p-4">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted">Brief length</p>
+    <div className="flex flex-wrap items-center gap-3">
       <BriefLengthPicker value={length} onChange={save} disabled={pending} name={`show-${showId}-length`} />
-      <p className="text-sm text-muted">
-        Applies the next time you Generate, or when a new episode is auto-briefed. Existing briefs
-        are not rewritten until then.
-      </p>
-      {saved ? <p className="text-sm text-ok">Saved. Generate again to rewrite an existing brief.</p> : null}
-      {error ? <p className="text-sm text-danger">{error}</p> : null}
+      {saved ? <p className="text-xs text-ok">Saved</p> : null}
+      {error ? <p className="text-xs text-danger">{error}</p> : null}
     </div>
   );
 }

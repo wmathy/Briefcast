@@ -118,12 +118,83 @@ export function stripXingOrVbriFrame(buffer: Buffer): Buffer {
   return audio;
 }
 
+const MPEG1_SAMPLES_PER_FRAME = 1152;
+
+function mpeg1ChannelCount(header: Buffer): number {
+  return ((header[3] >> 6) & 0x03) === 3 ? 1 : 2;
+}
+
+function xingTagOffset(channels: number): number {
+  return 4 + (channels === 1 ? 17 : 32);
+}
+
+export function countMpeg1Layer3Frames(buffer: Buffer): {
+  frames: number;
+  sampleRate: number;
+  header: Buffer;
+} | null {
+  if (buffer.length < 4) return null;
+  const header = Buffer.from(buffer.subarray(0, 4));
+  const sampleRate = MPEG1_SAMPLE_RATE[(header[2] >> 2) & 0x03];
+  if (!sampleRate) return null;
+
+  let offset = 0;
+  let frames = 0;
+  while (offset + 4 <= buffer.length) {
+    const length = mpeg1Layer3FrameLength(buffer, offset);
+    if (!length) break;
+    frames += 1;
+    offset += length;
+  }
+  if (frames === 0) return null;
+  return { frames, sampleRate, header };
+}
+
+/** Prepend a Xing frame whose frame/byte counts match the full file, not the first chunk. */
+export function writeFullFileXing(audio: Buffer): Buffer {
+  const payload = stripXingOrVbriFrame(audio);
+  const counted = countMpeg1Layer3Frames(payload);
+  if (!counted) return payload;
+
+  const frameLength = mpeg1Layer3FrameLength(counted.header, 0);
+  const xingAt = xingTagOffset(mpeg1ChannelCount(counted.header));
+  if (!frameLength || frameLength < xingAt + 16 + 100) return payload;
+
+  const totalFrames = counted.frames + 1;
+  const totalBytes = frameLength + payload.length;
+  const frame = Buffer.alloc(frameLength);
+  counted.header.copy(frame, 0, 0, 4);
+  frame.write("Xing", xingAt);
+  frame.writeUInt32BE(7, xingAt + 4);
+  frame.writeUInt32BE(totalFrames, xingAt + 8);
+  frame.writeUInt32BE(totalBytes, xingAt + 12);
+  for (let index = 0; index < 100; index += 1) {
+    frame[xingAt + 16 + index] = Math.min(255, Math.round((index / 99) * 255));
+  }
+  return Buffer.concat([frame, payload]);
+}
+
+/** Strip leftover chunk Xing and write one header for the true full length. */
+export function normalizeMp3ForPlayback(buffer: Buffer): Buffer {
+  return writeFullFileXing(buffer);
+}
+
 export function concatMp3(buffers: Buffer[]): Buffer {
   if (buffers.length === 0) return Buffer.alloc(0);
   const frames = buffers.map((buffer) => stripXingOrVbriFrame(buffer)).filter((part) => part.length > 0);
   if (frames.length === 0) return Buffer.alloc(0);
-  if (frames.length === 1) return frames[0];
-  return Buffer.concat(frames);
+  const joined = frames.length === 1 ? frames[0] : Buffer.concat(frames);
+  return writeFullFileXing(joined);
+}
+
+/** Frame-accurate duration when the file is MPEG1 Layer III; else CBR byte estimate. */
+export function mp3PlaybackDurationSeconds(buffer: Buffer, bitRate = 128_000): number {
+  const payload = stripXingOrVbriFrame(buffer);
+  const counted = countMpeg1Layer3Frames(payload);
+  if (counted) {
+    return (counted.frames * MPEG1_SAMPLES_PER_FRAME) / counted.sampleRate;
+  }
+  return estimateMp3DurationSeconds(payload, bitRate);
 }
 
 /** CBR duration estimate used only in tests / sanity checks (128 kbps xAI default). */

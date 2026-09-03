@@ -16,12 +16,13 @@ describe("per-follow length UI", () => {
     expect(source).toContain("initialLength");
   });
 
-  it("documents that changing length waits for the next Generate", () => {
+  it("lets the show page change length without a helper paragraph", () => {
     const source = readFileSync(
       path.join(__dirname, "../components/ShowBriefLengthControl.tsx"),
       "utf8",
     );
-    expect(source).toContain("Applies the next time you Generate");
-    expect(source).toContain("Existing briefs");
+    expect(source).toContain("BriefLengthPicker");
+    expect(source).not.toContain("Applies the next time you Generate");
+    expect(source).not.toContain("Existing briefs");
   });
 });

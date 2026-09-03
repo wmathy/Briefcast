@@ -3,10 +3,13 @@ import {
   XAI_TTS_CHUNK_CHARS,
   XAI_TTS_MAX_CHARS,
   concatMp3,
+  countMpeg1Layer3Frames,
   estimateMp3DurationSeconds,
   mpeg1Layer3FrameLength,
+  mp3PlaybackDurationSeconds,
   splitTextForTts,
   stripXingOrVbriFrame,
+  writeFullFileXing,
 } from "./tts";
 import { BRIEF_LENGTH_SPECS, countWords } from "./brief-length";
 
@@ -87,5 +90,39 @@ describe("concatMp3", () => {
   it("estimates CBR duration from payload size", () => {
     const oneSecond = Buffer.alloc(16_000);
     expect(estimateMp3DurationSeconds(oneSecond, 128_000)).toBe(1);
+  });
+
+  it("writes a full-file Xing so duration is not the first chunk", () => {
+    const bitrate128 = 9;
+    const sr44100 = 0;
+    const header = Buffer.from([0xff, 0xfb, (bitrate128 << 4) | (sr44100 << 2), 0x00]);
+    const frameLength = mpeg1Layer3FrameLength(header, 0);
+    expect(frameLength).toBeGreaterThan(4);
+
+    function silentFrame(): Buffer {
+      const frame = Buffer.alloc(frameLength);
+      header.copy(frame);
+      return frame;
+    }
+
+    const firstXing = Buffer.alloc(frameLength);
+    header.copy(firstXing);
+    firstXing.write("Xing", 36);
+    firstXing.writeUInt32BE(1, 44);
+
+    const chunkOne = Buffer.concat([firstXing, silentFrame(), silentFrame()]);
+    const chunkTwo = Buffer.concat([firstXing, silentFrame(), silentFrame(), silentFrame()]);
+    const joined = concatMp3([chunkOne, chunkTwo]);
+    expect(joined.includes(Buffer.from("Xing"))).toBe(true);
+
+    const payload = stripXingOrVbriFrame(joined);
+    expect(countMpeg1Layer3Frames(payload)?.frames).toBe(5);
+    expect(mp3PlaybackDurationSeconds(joined)).toBeCloseTo((5 * 1152) / 44100, 5);
+
+    const rewritten = writeFullFileXing(payload);
+    const xingFrame = rewritten.subarray(0, frameLength);
+    expect(xingFrame.includes(Buffer.from("Xing"))).toBe(true);
+    expect(xingFrame.readUInt32BE(40)).toBe(7);
+    expect(xingFrame.readUInt32BE(44)).toBe(6);
   });
 });
