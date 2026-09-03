@@ -1,7 +1,7 @@
 import { mpeg1Layer3FrameLength, stripId3v1, stripId3v2 } from "@/lib/tts";
 
-/** ~8 MB ≈ 8–10 minutes at 128 kbps. Every byte of the file is sent across chunks. */
-export const STT_CHUNK_BYTES = 8 * 1024 * 1024;
+/** ~2 MB ≈ 2 minutes at 128 kbps. 8 MB chunks were timing out the 300s STT turn. */
+export const STT_CHUNK_BYTES = 2 * 1024 * 1024;
 
 function findFrameNear(buffer: Buffer, hint: number): number {
   const start = Math.max(0, hint - 4096);

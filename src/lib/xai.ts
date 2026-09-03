@@ -108,7 +108,7 @@ export function formatDiarizedTranscript(result: {
 
 const MAX_STT_DOWNLOAD_BYTES = 500 * 1024 * 1024;
 const STT_URL_FALLBACK_MAX_SECONDS = 15 * 60;
-const STT_RETRIES = 3;
+const STT_RETRIES = 2;
 
 export type SttResult = {
   text: string;
@@ -134,7 +134,7 @@ export async function postStt(form: FormData): Promise<SttResult | null> {
       method: "POST",
       headers: { Authorization: `Bearer ${key}` },
       body: form,
-      signal: AbortSignal.timeout(240_000),
+      signal: AbortSignal.timeout(90_000),
     });
     const body = await response.text();
     if (!response.ok) {
@@ -190,12 +190,12 @@ export async function fetchAudioSlice(
     const range = response.headers.get("content-range");
     const rangeTotal = range?.match(/\/(\d+)\s*$/)?.[1];
     if (response.status === 206 && rangeTotal) {
-      return { data: buffer, totalBytes: Number(rangeTotal) };
+      return { data: buffer.subarray(0, Math.min(buffer.length, wantBytes)), totalBytes: Number(rangeTotal) };
     }
 
     const totalBytes = buffer.byteLength;
     if (totalBytes > MAX_STT_DOWNLOAD_BYTES) return null;
-    const data = start > 0 ? buffer.subarray(start, Math.min(buffer.length, start + wantBytes)) : buffer;
+    const data = buffer.subarray(start, Math.min(buffer.length, start + wantBytes));
     if (data.byteLength < 80) return null;
     return { data, totalBytes };
   } catch (error) {

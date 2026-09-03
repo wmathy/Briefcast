@@ -18,13 +18,13 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     (async () => {
     let more = true;
     let turns = 0;
-    while (more && !cancelled && turns < 80) {
+    while (more && !cancelled && turns < 200) {
       turns += 1;
         const response = await fetch("/api/queue/refresh?continue=1", { method: "POST" });
         const data = (await response.json().catch(() => ({}))) as RefreshResult;
         if (cancelled) return;
         if (!response.ok) {
-          if (refreshShouldContinue(response.status, data) && turns < 80) {
+          if (refreshShouldContinue(response.status, data) && turns < 200) {
             setStatus(response.status === 504 || response.status === 502 ? "Continuing…" : refreshStatusLabel(data));
             more = true;
             continue;
