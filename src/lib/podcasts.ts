@@ -32,29 +32,16 @@ export async function upsertShowFromItunes(podcast: ItunesPodcast) {
 export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: number | null) {
   const prisma = getPrisma();
   const episodes = await fetchRssEpisodes(feedUrl, limit);
-  const createdEpisodes: SyncedEpisode[] = [];
+  const existing = await prisma.episode.findMany({
+    where: { showId },
+    select: { guid: true },
+  });
+  const have = new Set(existing.map((episode) => episode.guid));
+  const toCreate = episodes.filter((episode) => !have.has(episode.guid));
 
-  for (const episode of episodes) {
-    const existing = await prisma.episode.findUnique({
-      where: { showId_guid: { showId, guid: episode.guid } },
-      select: { id: true },
-    });
-    if (existing) {
-      await prisma.episode.update({
-        where: { id: existing.id },
-        data: {
-          title: episode.title,
-          publishedAt: episode.publishedAt,
-          link: episode.link,
-          audioUrl: episode.audioUrl,
-          description: episode.description,
-          guest: episode.guest,
-        },
-      });
-      continue;
-    }
-    const created = await prisma.episode.create({
-      data: {
+  if (toCreate.length > 0) {
+    await prisma.episode.createMany({
+      data: toCreate.map((episode) => ({
         showId,
         guid: episode.guid,
         title: episode.title,
@@ -63,10 +50,17 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
         audioUrl: episode.audioUrl,
         description: episode.description,
         guest: episode.guest,
-      },
+      })),
     });
-    createdEpisodes.push({ id: created.id, publishedAt: created.publishedAt });
   }
+
+  const createdEpisodes: SyncedEpisode[] =
+    toCreate.length === 0
+      ? []
+      : await prisma.episode.findMany({
+          where: { showId, guid: { in: toCreate.map((episode) => episode.guid) } },
+          select: { id: true, publishedAt: true },
+        });
 
   return { fetched: episodes.length, created: createdEpisodes.length, createdEpisodes };
 }
