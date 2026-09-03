@@ -1,5 +1,5 @@
 /** Max briefs one request writes so we stay inside function time. Extra shows stay queued. */
-export const AUTO_BRIEF_LIMIT = 3;
+export const AUTO_BRIEF_LIMIT = 1;
 
 export function episodeNeedsSpokenBrief(episode: {
   brief?: { sourceType?: string | null } | null;

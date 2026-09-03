@@ -18,9 +18,9 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     (async () => {
     let more = true;
     let turns = 0;
-    while (more && !cancelled && turns < 40) {
+    while (more && !cancelled && turns < 80) {
       turns += 1;
-        const response = await fetch("/api/queue/refresh", { method: "POST" });
+        const response = await fetch("/api/queue/refresh?continue=1", { method: "POST" });
         const data = (await response.json()) as RefreshResult;
         if (cancelled) return;
         if (!response.ok) {

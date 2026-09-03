@@ -2,7 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { STT_CHUNK_BYTES } from "@/lib/audio-chunks";
 import { fetchAudioSlice, sttBufferChunk, xaiSttFromAudioUrl, type SttResult } from "@/lib/xai";
 
-export const STT_CHUNKS_PER_TURN = 2;
+export const STT_CHUNKS_PER_TURN = 1;
 const LOCK_STALE_MS = 8 * 60 * 1000;
 
 export class TranscriptInProgressError extends Error {

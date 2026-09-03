@@ -6,14 +6,16 @@ import { hasXaiKey } from "@/lib/env";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-export async function POST() {
+export async function POST(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Sign in required." }, { status: 401 });
   }
 
+  const skipFeedSync = new URL(request.url).searchParams.get("continue") === "1";
+
   try {
-    const result = await refreshFollowedBriefs({ userId: user.id });
+    const result = await refreshFollowedBriefs({ userId: user.id, skipFeedSync });
     return NextResponse.json({
       created: result.created,
       fetchedShows: result.fetchedShows,

@@ -23,7 +23,7 @@ describe("takeAutoBriefBatch", () => {
     const batch = takeAutoBriefBatch(["a", "b", "c", "d", "e"], 3);
     expect(batch.toGenerate).toEqual(["a", "b", "c"]);
     expect(batch.remaining).toBe(2);
-    expect(AUTO_BRIEF_LIMIT).toBe(3);
+    expect(AUTO_BRIEF_LIMIT).toBe(1);
   });
 
   it("dedupes and ignores empty ids", () => {

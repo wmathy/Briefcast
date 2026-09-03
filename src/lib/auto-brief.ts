@@ -101,6 +101,7 @@ export async function generateAutoBriefs(
 export async function collectFollowedAutoBriefIds(options?: {
   userId?: string;
   showId?: string;
+  skipFeedSync?: boolean;
 }) {
   const prisma = getPrisma();
   const shows = await prisma.show.findMany({
@@ -119,6 +120,10 @@ export async function collectFollowedAutoBriefIds(options?: {
 
   for (const show of shows) {
     try {
+      if (options?.skipFeedSync) {
+        autoBriefIds.push(...(await collectWindowedAutoBriefIds({ showId: show.id, userId: options.userId })));
+        continue;
+      }
       const result = await syncShowAndPickAutoBriefs(show.id, show.feedUrl, options?.userId);
       created += result.created;
       fetched += result.fetched;
@@ -143,6 +148,7 @@ export async function collectFollowedAutoBriefIds(options?: {
 export async function refreshFollowedBriefs(options?: {
   userId?: string;
   showId?: string;
+  skipFeedSync?: boolean;
 }) {
   await purgeNotesOnlyBriefs();
   const poll = await collectFollowedAutoBriefIds(options);
