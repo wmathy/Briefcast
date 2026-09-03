@@ -74,7 +74,10 @@ export default async function LibraryPage() {
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
                   <p className="font-medium">{episode.title}</p>
                   <p className="text-sm text-muted">
-                    {formatBriefDate(episode.publishedAt)} · brief + spoken recap
+                    {formatBriefDate(episode.publishedAt)} ·{" "}
+                    {episode.brief?.sourceType === "shownotes"
+                      ? "notes-only (not the full episode)"
+                      : "full-transcript brief + spoken recap"}
                   </p>
                 </Link>
               </li>

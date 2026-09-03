@@ -76,10 +76,16 @@ export function buildBriefPrompt(input: {
     ? `The SOURCE TEXT is too thin for a ${spec.label} brief (${spec.durationLabel}, ${spec.spokenWords.min}–${spec.spokenWords.max} spoken words at 1x). Write the most complete faithful brief the source supports. spokenRecap may be shorter than ${spec.spokenWords.min} words. Do not invent topics, quotes, or filler to reach the target.`
     : `Target a ${spec.label} brief. spokenRecap must be ${spec.spokenWords.min}–${spec.spokenWords.max} words so it runs about ${spec.durationLabel} (~150 words/minute at 1x). Do not speed up or slow down speech. Do not pad with filler or repeat yourself. Cover more of the source, with more segments and detail, when the length is Medium or Long.`;
 
+  const transcriptRule =
+    input.source.sourceType === "transcript"
+      ? "The SOURCE TEXT is the full episode transcript (or a speech-to-text of the episode audio). Cover the whole episode — not a teaser, intro, or show-notes blurb. Medium and Long briefs must draw from later segments, not only the opening."
+      : "The SOURCE TEXT is official show notes only. Do not pretend you heard the episode. Stay inside the notes.";
+
   return `Write a faithful episode brief from the SOURCE TEXT only.
 
 Rules:
 - Do not invent quotes, guests, topics, or details that are not in the source.
+- ${transcriptRule}
 - If a guest is not clearly named, set guest to null.
 - Overview: ${spec.overviewSentences.min} to ${spec.overviewSentences.max} sentences. Longer lengths get a fuller overview, still only from the source.
 - Main segments must stay in source order. Aim for ${spec.segments.min} to ${spec.segments.max} segments, each with more detail for longer lengths. Mark speaker as host, guest, both, or unknown. If the source cannot support that many, use fewer — never invent a segment.

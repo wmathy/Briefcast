@@ -1,3 +1,4 @@
+import { hasXaiKey } from "@/lib/env";
 import { looksLikeTranscriptUrl } from "@/lib/html";
 import {
   SHOWNOTES_CONFIDENCE_NOTE,
@@ -12,6 +13,7 @@ import {
   youtubeCaptionUrls,
   youtubeTitlesMatch,
 } from "@/lib/transcripts";
+import { xaiSttFromAudioUrl } from "@/lib/xai";
 
 export type EpisodeSource = {
   text: string;
@@ -19,8 +21,9 @@ export type EpisodeSource = {
   confidenceNote: string | null;
 };
 
-const MAX_SOURCE_CHARS = 80_000;
-const MAX_FETCH_ATTEMPTS = 10;
+/** Long enough for a 3-hour episode at conversational pace. */
+export const MAX_SOURCE_CHARS = 400_000;
+const MAX_FETCH_ATTEMPTS = 12;
 const FETCH_TIMEOUT_MS = 12_000;
 
 const BRIEFCAST_UA = "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)";
@@ -103,6 +106,7 @@ export async function loadEpisodeSource(input: {
   description: string;
   transcriptUrl?: string | null;
   episodeLink?: string | null;
+  audioUrl?: string | null;
   showTitle?: string | null;
   episodeTitle?: string | null;
 }): Promise<EpisodeSource> {
@@ -162,7 +166,8 @@ export async function loadEpisodeSource(input: {
     }
   }
 
-  if (input.showTitle && input.episodeTitle && attempts < MAX_FETCH_ATTEMPTS) {
+  const alreadyTriedOfficialNpr = fromNpr.length > 0;
+  if (!alreadyTriedOfficialNpr && input.showTitle && input.episodeTitle && attempts < MAX_FETCH_ATTEMPTS) {
     const videoId = await searchYoutubeVideoId(input.showTitle, input.episodeTitle);
     if (videoId) {
       const hit = await tryYoutubeCaptions(videoId, tryUrl);
@@ -178,7 +183,30 @@ export async function loadEpisodeSource(input: {
     if (directories) return directories;
   }
 
+  const fromAudio = await transcribeEpisodeAudio(input);
+  if (fromAudio) return fromAudio;
+
   return shownotesSource(notes);
+}
+
+async function transcribeEpisodeAudio(input: {
+  audioUrl?: string | null;
+  showTitle?: string | null;
+  episodeTitle?: string | null;
+}): Promise<EpisodeSource | null> {
+  if (!input.audioUrl || !hasXaiKey()) return null;
+  try {
+    const text = await xaiSttFromAudioUrl(
+      input.audioUrl,
+      [input.showTitle, input.episodeTitle].filter((value): value is string => Boolean(value)),
+    );
+    if (text && text.trim().length > 80) {
+      return transcriptSource(text);
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 async function tryYoutubeCaptions(

@@ -43,7 +43,7 @@ curl -X POST https://api.x.ai/v1/tts \
   --output recap.mp3
 ```
 
-Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. Generate looks for a real transcript first (RSS `podcast:transcript`, official episode/transcript pages, public YouTube captions, then public transcript pages) and falls back to official show notes with a confidence note. No extra API keys are required for that lookup.
+Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. Generate uses the **full episode transcript**: stored or RSS `podcast:transcript`, official transcript pages (NPR `/transcripts/` and `text.npr.org`), public captions, then Grok Speech-to-Text of the episode audio. Show notes are a last-resort fallback and the UI labels those briefs notes-only. The same `XAI_API_KEY` covers chat, STT, and TTS.
 
 ## Deploy on Vercel
 
@@ -73,4 +73,4 @@ npm run lint
 
 ## Stack
 
-Next.js App Router, TypeScript, Tailwind, Prisma (SQLite locally, Postgres on Vercel), iTunes Search API, RSS, xAI chat + TTS.
+Next.js App Router, TypeScript, Tailwind, Prisma (SQLite locally, Postgres on Vercel), iTunes Search API, RSS, xAI chat + STT + TTS.

@@ -79,6 +79,96 @@ async function xaiTtsMp3Chunk(text: string, speed: number): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+export function formatDiarizedTranscript(result: {
+  text?: string;
+  words?: { text?: string; speaker?: number }[];
+}): string {
+  const words = result.words ?? [];
+  if (words.some((word) => typeof word.speaker === "number")) {
+    const lines: string[] = [];
+    let current: number | undefined;
+    let buffer: string[] = [];
+    const flush = () => {
+      if (!buffer.length) return;
+      const label = current == null ? "Speaker" : `Speaker ${current + 1}`;
+      lines.push(`${label}: ${buffer.join(" ")}`);
+      buffer = [];
+    };
+    for (const word of words) {
+      if (word.speaker !== current && buffer.length) flush();
+      current = word.speaker;
+      if (word.text) buffer.push(word.text);
+    }
+    flush();
+    if (lines.length >= 2 || lines.join(" ").trim().length > 80) return lines.join("\n");
+  }
+  return (result.text ?? "").trim();
+}
+
+const MAX_STT_UPLOAD_BYTES = 40 * 1024 * 1024;
+
+function sttForm(keyterms: string[]): FormData {
+  const form = new FormData();
+  form.append("format", "true");
+  form.append("language", "en");
+  form.append("diarize", "true");
+  for (const term of keyterms.filter(Boolean).slice(0, 8)) {
+    form.append("keyterm", term.slice(0, 50));
+  }
+  return form;
+}
+
+async function postStt(form: FormData): Promise<string | null> {
+  const key = requireXaiKey();
+  const response = await fetch(`${XAI_API_BASE}/stt`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+    signal: AbortSignal.timeout(240_000),
+  });
+  if (!response.ok) return null;
+  const data = (await response.json()) as {
+    text?: string;
+    words?: { text?: string; speaker?: number }[];
+  };
+  const text = formatDiarizedTranscript(data);
+  return text.length > 80 ? text : null;
+}
+
+async function fetchAudioForStt(audioUrl: string): Promise<Blob | null> {
+  try {
+    const response = await fetch(audioUrl, {
+      headers: {
+        Accept: "audio/*,*/*",
+        "User-Agent": "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)",
+      },
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!response.ok) return null;
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength < 80 || buffer.byteLength > MAX_STT_UPLOAD_BYTES) return null;
+    return new Blob([buffer], { type: response.headers.get("content-type") || "audio/mpeg" });
+  } catch {
+    return null;
+  }
+}
+
+export async function xaiSttFromAudioUrl(
+  audioUrl: string,
+  keyterms: string[] = [],
+): Promise<string | null> {
+  const viaUrl = sttForm(keyterms);
+  viaUrl.append("url", audioUrl);
+  const fromUrl = await postStt(viaUrl);
+  if (fromUrl) return fromUrl;
+
+  const file = await fetchAudioForStt(audioUrl);
+  if (!file) return null;
+  const viaFile = sttForm(keyterms);
+  viaFile.append("file", file, "episode.mp3");
+  return postStt(viaFile);
+}
+
 export async function xaiTtsMp3(text: string, speed: number): Promise<Buffer> {
   const chunks = splitTextForTts(text);
   if (chunks.length === 0) {

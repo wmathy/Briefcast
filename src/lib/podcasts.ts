@@ -34,10 +34,19 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
   const episodes = await fetchRssEpisodes(feedUrl, limit);
   const existing = await prisma.episode.findMany({
     where: { showId },
-    select: { guid: true },
+    select: { id: true, guid: true, transcriptUrl: true, link: true, audioUrl: true },
   });
-  const have = new Set(existing.map((episode) => episode.guid));
+  const have = new Map(existing.map((episode) => [episode.guid, episode]));
   const toCreate = episodes.filter((episode) => !have.has(episode.guid));
+  const toRefresh = episodes.filter((episode) => {
+    const row = have.get(episode.guid);
+    if (!row) return false;
+    return (
+      (episode.transcriptUrl && episode.transcriptUrl !== row.transcriptUrl) ||
+      (episode.link && episode.link !== row.link) ||
+      (episode.audioUrl && !row.audioUrl)
+    );
+  });
 
   if (toCreate.length > 0) {
     await prisma.episode.createMany({
@@ -48,9 +57,23 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
         publishedAt: episode.publishedAt,
         link: episode.link,
         audioUrl: episode.audioUrl,
+        transcriptUrl: episode.transcriptUrl,
         description: episode.description,
         guest: episode.guest,
       })),
+    });
+  }
+
+  for (const episode of toRefresh) {
+    const row = have.get(episode.guid);
+    if (!row) continue;
+    await prisma.episode.update({
+      where: { id: row.id },
+      data: {
+        transcriptUrl: episode.transcriptUrl ?? row.transcriptUrl,
+        link: episode.link ?? row.link,
+        audioUrl: episode.audioUrl ?? row.audioUrl,
+      },
     });
   }
 

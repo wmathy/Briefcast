@@ -14,7 +14,7 @@ Friends follow **their own** podcasts and get a written episode brief plus a spo
 - Written brief format (scales with the follow’s length):
   - Header: show, title, guest (if named in source), date, official link, requested length
   - Overview, main segments in source order (host vs guest when clear), and takeaways — more sentences/segments/detail for Medium and Long
-- Source policy: prefer a real transcript when one is publicly available (RSS `podcast:transcript`, an official episode/transcript page, or public captions such as YouTube). Otherwise use official show notes and show a confidence note. Do not invent quotes or topics. If the source is too thin for the chosen length, write the best faithful brief and show that the source was limited.
+- Source policy: every brief is written from the **full episode transcript**, not the RSS description / show notes. Sources, in order: stored or RSS `podcast:transcript`, official transcript pages (including NPR `/transcripts/` and `text.npr.org`), public captions, then **Grok Speech-to-Text** of the episode audio. Show notes are a last-resort fallback only. If that fallback is used, the UI says **notes-only** (not the full episode). Notes-only briefs are not permanent: Generate and the next auto-write retry from a transcript. Do not invent quotes or topics. If the source is too thin for the chosen length, write the best faithful brief and show that the source was limited.
 - Spoken recap via **Grok Voice / xAI TTS only** (`POST https://api.x.ai/v1/tts`, `voice_id: eve`, speed `1.0`). Unary TTS is capped at 15,000 characters; recaps are chunked well below that and stitched without Xing duration headers so the player is not clipped to the first chunk. The episode player sits above the written summary.
 - If `XAI_API_KEY` is missing, the full UI still runs. Auto-briefs fail with a message to add the key. Seed NPR rows may exist in the database, but the home queue only shows episodes that have a real spoken recap.
 
@@ -22,5 +22,5 @@ Friends follow **their own** podcasts and get a written episode brief plus a spo
 
 - Email (or other) notifications when a followed show publishes and a brief is ready
 - Shared listening queues and family accounts
-- Richer transcript providers when a show does not publish one
+- Persist fetched/STT transcripts so a later Generate does not re-transcribe
 - Object storage for spoken recaps if the database outgrows in-row audio

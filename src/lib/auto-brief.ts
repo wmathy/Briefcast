@@ -20,7 +20,11 @@ export async function latestEpisodeNeedingBrief(showId: string) {
   return prisma.episode.findFirst({
     where: {
       showId,
-      OR: [{ brief: { is: null } }, { recapAudio: { is: null } }],
+      OR: [
+        { brief: { is: null } },
+        { recapAudio: { is: null } },
+        { brief: { is: { sourceType: "shownotes" } } },
+      ],
     },
     orderBy: { publishedAt: "desc" },
     select: { id: true },
@@ -66,8 +70,12 @@ export async function generateAutoBriefs(
       continue;
     }
     try {
-      await generateEpisodeBrief(id, { userId: options?.userId });
-      generated += 1;
+      const result = await generateEpisodeBrief(id, { userId: options?.userId, force: false });
+      if (result.skipped) {
+        skipped += 1;
+      } else {
+        generated += 1;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Generate failed.";
       errors.push(`${episode.show.title}: ${message}`);

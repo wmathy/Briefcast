@@ -1,7 +1,7 @@
 import { decodeEntities, looksLikeTranscriptUrl, stripHtml } from "@/lib/html";
 
 export const SHOWNOTES_CONFIDENCE_NOTE =
-  "This brief is based on official show notes, not a full transcript. Quotes and topics not present in the notes were not added.";
+  "Notes-only source: a full episode transcript was not available, so this brief covers the official show notes — not the entire episode. Quotes and topics not present in the notes were not added.";
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
@@ -35,25 +35,26 @@ export function extractTranscriptUrlsFromText(text: string): string[] {
   return cleaned.filter((url) => looksLikeTranscriptUrl(url) && !extractYoutubeVideoIds(url).length);
 }
 
-export function nprTranscriptUrls(episodeLink?: string | null): string[] {
-  if (!episodeLink) return [];
+export function nprStoryId(episodeLink?: string | null): string | null {
+  if (!episodeLink) return null;
   try {
     const url = new URL(episodeLink);
-    if (!/(^|\.)npr\.org$/i.test(url.hostname)) return [];
+    if (!/(^|\.)npr\.org$/i.test(url.hostname)) return null;
     const fromTranscriptPath = url.pathname.match(/\/transcripts\/([^/]+)/i);
-    if (fromTranscriptPath?.[1]) {
-      return [`https://www.npr.org/transcripts/${fromTranscriptPath[1]}`];
-    }
+    if (fromTranscriptPath?.[1]) return fromTranscriptPath[1];
     const fromStory = url.pathname.match(
       /\/(?:\d{4}\/\d{2}\/\d{2}\/)?((?:[a-z]{2}-s\d+-\d+)|\d{7,})/i,
     );
-    if (fromStory?.[1]) {
-      return [`https://www.npr.org/transcripts/${fromStory[1]}`];
-    }
+    return fromStory?.[1] ?? null;
   } catch {
-    return [];
+    return null;
   }
-  return [];
+}
+
+export function nprTranscriptUrls(episodeLink?: string | null): string[] {
+  const id = nprStoryId(episodeLink);
+  if (!id) return [];
+  return [`https://www.npr.org/transcripts/${id}`, `https://text.npr.org/${id}`];
 }
 
 export function publicDirectoryUrls(showTitle: string, episodeTitle: string): string[] {
@@ -202,15 +203,25 @@ function extractPodscripts(html: string): string | null {
   return parts.length >= 8 ? parts.join("\n") : null;
 }
 
+function extractTextNpr(html: string): string | null {
+  const match = html.match(
+    /class="paragraphs-container"[^>]*>([\s\S]*?)(?:<div class="lower-nav|<\/article>|<\/main>|<\/body>)/i,
+  ) ?? html.match(/class="paragraphs-container"[^>]*>([\s\S]*)/i);
+  const text = stripHtml(match?.[1] ?? "").trim();
+  return looksLikeSpokenTranscript(text) ? text : null;
+}
+
 function extractNprTranscript(html: string): string | null {
   const tagged = html.match(/<[^>]*aria-label="Transcript"[^>]*>/i);
   const start = tagged?.index ?? html.search(/aria-label="Transcript"/i);
-  if (start < 0) return null;
-  const fromOpenTag = html.slice(start);
-  const afterTag = fromOpenTag.replace(/^<[^>]+>/, "");
-  const cut = afterTag.split(/<footer\b|id="footer"|class="[^"]*\bfooter\b/i)[0] ?? afterTag;
-  const text = stripHtml(cut.replace(/<svg[\s\S]*?<\/svg>/gi, "")).replace(/^Transcript\s*/i, "").trim();
-  return looksLikeSpokenTranscript(text) ? text : null;
+  if (start >= 0) {
+    const fromOpenTag = html.slice(start);
+    const afterTag = fromOpenTag.replace(/^<[^>]+>/, "");
+    const cut = afterTag.split(/<footer\b|id="footer"|class="[^"]*\bfooter\b/i)[0] ?? afterTag;
+    const text = stripHtml(cut.replace(/<svg[\s\S]*?<\/svg>/gi, "")).replace(/^Transcript\s*/i, "").trim();
+    if (looksLikeSpokenTranscript(text)) return text;
+  }
+  return extractTextNpr(html);
 }
 
 function cleanCaptionText(raw: string): string {
@@ -256,11 +267,12 @@ export function parseTranscriptPayload(raw: string, contentType: string, sourceU
     if (host.includes("npr.org")) {
       const extracted = extractNprTranscript(raw);
       if (extracted) return extracted;
+      // Empty-page / notes-only NPR HTML must not become a "transcript" via stripHtml.
+      if (/\/transcripts\//i.test(sourceUrl) || host.startsWith("text.npr.org")) {
+        return "";
+      }
     }
     if (host.includes("happyscribe.com") || host.includes("podscripts.co")) {
-      return "";
-    }
-    if (host.includes("npr.org") && /\/transcripts\//i.test(sourceUrl)) {
       return "";
     }
     return stripHtml(raw);

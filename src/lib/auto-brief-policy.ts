@@ -2,10 +2,11 @@
 export const AUTO_BRIEF_LIMIT = 3;
 
 export function episodeNeedsSpokenBrief(episode: {
-  brief?: unknown;
+  brief?: { sourceType?: string | null } | null;
   recapAudio?: unknown;
 }): boolean {
-  return !episode.brief || !episode.recapAudio;
+  if (!episode.brief || !episode.recapAudio) return true;
+  return episode.brief.sourceType === "shownotes";
 }
 
 export function takeAutoBriefBatch(ids: string[], limit = AUTO_BRIEF_LIMIT) {

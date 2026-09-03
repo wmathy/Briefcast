@@ -22,6 +22,10 @@ describe("library homepage queue", () => {
     expect(source).toContain("briefLength");
   });
 
+  it("marks notes-only queue cards so they are not sold as full-episode briefs", () => {
+    expect(source).toContain("notes-only (not the full episode)");
+  });
+
   it("auto-writes the latest brief instead of waiting for a Generate click", () => {
     expect(source).toContain("AutoGenerateLatest");
     expect(source).toContain("countLatestFollowedNeedingBrief");

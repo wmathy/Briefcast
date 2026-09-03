@@ -9,7 +9,12 @@ import {
 describe("episodeNeedsSpokenBrief", () => {
   it("treats a seed brief with no spoken audio as still needing generation", () => {
     expect(episodeNeedsSpokenBrief({ brief: { id: "seed" }, recapAudio: null })).toBe(true);
-    expect(episodeNeedsSpokenBrief({ brief: { id: "real" }, recapAudio: { id: "mp3" } })).toBe(false);
+    expect(episodeNeedsSpokenBrief({ brief: { id: "real", sourceType: "transcript" }, recapAudio: { id: "mp3" } })).toBe(
+      false,
+    );
+    expect(episodeNeedsSpokenBrief({ brief: { id: "notes", sourceType: "shownotes" }, recapAudio: { id: "mp3" } })).toBe(
+      true,
+    );
   });
 });
 

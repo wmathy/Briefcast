@@ -8,10 +8,12 @@ export function GenerateButton({
   episodeId,
   hasXaiKey,
   briefLength,
+  notesOnly,
 }: {
   episodeId: string;
   hasXaiKey: boolean;
   briefLength?: BriefLength;
+  notesOnly?: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(
@@ -40,11 +42,18 @@ export function GenerateButton({
       >
         {pending
           ? "Generating…"
-          : briefLength
-            ? `Generate ${formatBriefLengthLabel(briefLength)}`
-            : "Generate brief + voice"}
+          : notesOnly
+            ? "Generate from full transcript"
+            : briefLength
+              ? `Generate ${formatBriefLengthLabel(briefLength)}`
+              : "Generate brief + voice"}
       </button>
-      {briefLength ? (
+      {notesOnly ? (
+        <p className="text-xs text-muted">
+          The current brief is notes-only. This rewrite uses the full episode transcript when one
+          can be fetched or transcribed.
+        </p>
+      ) : briefLength ? (
         <p className="text-xs text-muted">
           Spoken length is measured at 1x. The player can still default to 1.2× playback.
         </p>

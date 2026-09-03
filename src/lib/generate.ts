@@ -32,9 +32,35 @@ export async function resolveEpisodeBriefLength(
   });
 }
 
+export function shouldRewriteExistingBrief(input: {
+  existingSourceType?: string | null;
+  hasAudio: boolean;
+  nextSourceType: "transcript" | "shownotes";
+  force: boolean;
+}): boolean {
+  if (input.force) return true;
+  if (!input.existingSourceType || !input.hasAudio) return true;
+  if (input.nextSourceType === "transcript") return true;
+  return false;
+}
+
+async function resolveRssTranscriptUrl(input: {
+  storedUrl?: string | null;
+  guid: string;
+  feedUrl: string;
+}): Promise<string | null> {
+  if (input.storedUrl) return input.storedUrl;
+  try {
+    const feedItems = await fetchRssEpisodes(input.feedUrl);
+    return feedItems.find((item) => item.guid === input.guid)?.transcriptUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function generateEpisodeBrief(
   episodeId: string,
-  options?: { userId?: string; briefLength?: BriefLength },
+  options?: { userId?: string; briefLength?: BriefLength; force?: boolean },
 ) {
   if (!hasXaiKey()) {
     throw new MissingXaiKeyError();
@@ -43,7 +69,7 @@ export async function generateEpisodeBrief(
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
     where: { id: episodeId },
-    include: { show: true },
+    include: { show: true, brief: true, recapAudio: true },
   });
   if (!episode) {
     throw new Error("Episode not found.");
@@ -52,21 +78,39 @@ export async function generateEpisodeBrief(
   const briefLength =
     options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
 
-  let transcriptUrl: string | null = null;
-  try {
-    const feedItems = await fetchRssEpisodes(episode.show.feedUrl, 40);
-    transcriptUrl = feedItems.find((item) => item.guid === episode.guid)?.transcriptUrl ?? null;
-  } catch {
-    transcriptUrl = null;
-  }
+  const transcriptUrl = await resolveRssTranscriptUrl({
+    storedUrl: episode.transcriptUrl,
+    guid: episode.guid,
+    feedUrl: episode.show.feedUrl,
+  });
 
   const source = await loadEpisodeSource({
     description: episode.description,
     transcriptUrl,
     episodeLink: episode.link,
+    audioUrl: episode.audioUrl,
     showTitle: episode.show.title,
     episodeTitle: episode.title,
   });
+
+  const force = options?.force ?? true;
+  if (
+    !shouldRewriteExistingBrief({
+      existingSourceType: episode.brief?.sourceType,
+      hasAudio: Boolean(episode.recapAudio),
+      nextSourceType: source.sourceType,
+      force,
+    })
+  ) {
+    return {
+      episodeId: episode.id,
+      sourceType: source.sourceType,
+      briefLength: parseBriefLength(episode.brief?.briefLength ?? briefLength),
+      sourceLimited: episode.brief?.sourceLimited ?? true,
+      spokenWords: countWords(episode.brief?.spokenRecap ?? ""),
+      skipped: true,
+    };
+  }
 
   const brief = await writeBriefFromSource({
     showTitle: episode.show.title,
@@ -117,7 +161,10 @@ export async function generateEpisodeBrief(
     }),
     prisma.episode.update({
       where: { id: episode.id },
-      data: { guest },
+      data: {
+        guest,
+        transcriptUrl: transcriptUrl ?? episode.transcriptUrl,
+      },
     }),
   ]);
 
@@ -127,5 +174,6 @@ export async function generateEpisodeBrief(
     briefLength: brief.briefLength,
     sourceLimited: brief.sourceLimited,
     spokenWords: countWords(spoken),
+    skipped: false,
   };
 }

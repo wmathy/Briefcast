@@ -46,10 +46,11 @@ model Episode {
   guid        String
   title       String
   publishedAt DateTime
-  link        String?
-  audioUrl    String?
-  description String      @default("")
-  guest       String?
+  link          String?
+  audioUrl      String?
+  transcriptUrl String?
+  description   String      @default("")
+  guest         String?
   seeded      Boolean     @default(false)
   createdAt   DateTime    @default(now())
   show        Show        @relation(fields: [showId], references: [id], onDelete: Cascade)

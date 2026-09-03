@@ -78,6 +78,21 @@ describe("buildBriefPrompt", () => {
     expect(long).toContain("20–30 min at 1x");
     expect(short).toContain("Do not invent");
     expect(long).toContain("Do not pad with filler");
+    expect(medium).toContain("official show notes only");
+  });
+
+  it("tells the model a transcript source is the full episode, not notes", () => {
+    const prompt = buildBriefPrompt({
+      ...base,
+      source: {
+        text: "HOST: Welcome.\nGUEST: We cover the second half of the interview in detail.",
+        sourceType: "transcript",
+        confidenceNote: null,
+      },
+    });
+    expect(prompt).toContain("full episode transcript");
+    expect(prompt).toContain("not a teaser");
+    expect(prompt).not.toContain("official show notes only");
   });
 
   it("when the source is thin, forbids inventing a longer recap", () => {

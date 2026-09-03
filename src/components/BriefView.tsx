@@ -50,10 +50,16 @@ export function BriefView({
 
       {player}
 
-      {sourceLimited ? (
+      {sourceType === "shownotes" ? (
+        <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
+          Notes-only source. A full episode transcript was not available, so this brief covers the
+          official show notes — not the entire episode. Generate again after a transcript is
+          available to rewrite from the full episode.
+        </p>
+      ) : sourceLimited ? (
         <p className="rounded-2xl border border-line bg-bg-raised px-4 py-3 text-sm text-muted">
           Source was limited for this length. The brief stays faithful to the available transcript
-          or notes and does not invent extra material.
+          and does not invent extra material.
         </p>
       ) : null}
 
@@ -92,7 +98,7 @@ export function BriefView({
       </section>
 
       <p className="text-xs text-muted">
-        Source: {sourceType === "transcript" ? "transcript" : "official show notes"}
+        Source: {sourceType === "transcript" ? "full episode transcript" : "official show notes only (not the episode)"}
         {confidenceNote ? ` · ${confidenceNote}` : ""}
       </p>
     </article>

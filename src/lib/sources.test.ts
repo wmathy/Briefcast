@@ -3,9 +3,12 @@ import { loadEpisodeSource } from "./sources";
 import { SHOWNOTES_CONFIDENCE_NOTE } from "./transcripts";
 
 const originalFetch = globalThis.fetch;
+const originalKey = process.env.XAI_API_KEY;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  if (originalKey === undefined) delete process.env.XAI_API_KEY;
+  else process.env.XAI_API_KEY = originalKey;
 });
 
 function jsonResponse(data: unknown, status = 200) {
@@ -213,6 +216,55 @@ describe("loadEpisodeSource", () => {
 
     expect(source.sourceType).toBe("transcript");
     expect(source.text).toContain("Hi, Jesse");
+  });
+
+  it("transcribes episode audio when published NPR pages have no spoken text", async () => {
+    process.env.XAI_API_KEY = "test-key";
+    const spoken = longSpoken("HOST: From the episode audio we later discuss stockpiles and the deadlock.");
+    const calls = mockFetch((url) => {
+      if (url.includes("api.x.ai/v1/stt")) {
+        return jsonResponse({ text: spoken });
+      }
+      if (url.includes("npr.org")) {
+        return textResponse(
+          `<html><body class="no-transcript"><div aria-label="Transcript"><span>Transcript</span></div></body></html>`,
+          200,
+          "text/html",
+        );
+      }
+      return textResponse("missing", 404);
+    });
+
+    const source = await loadEpisodeSource({
+      description: notes,
+      episodeLink: "https://www.npr.org/2026/09/03/nx-s1-5955302/pentagon-exodus",
+      audioUrl: "https://example.com/up-first.mp3",
+      showTitle: "Up First from NPR",
+      episodeTitle: "Pentagon Exodus",
+    });
+
+    expect(source.sourceType).toBe("transcript");
+    expect(source.confidenceNote).toBeNull();
+    expect(source.text).toContain("stockpiles");
+    expect(calls.some((url) => url.includes("api.x.ai/v1/stt"))).toBe(true);
+  });
+
+  it("keeps a long official transcript instead of truncating at the old 80k cap", async () => {
+    const body = "HOST: Spoken line about later topics in the episode. ".repeat(4000);
+    expect(body.length).toBeGreaterThan(80_000);
+    mockFetch((url) => {
+      if (url === "https://example.com/full.txt") return textResponse(body);
+      return textResponse("missing", 404);
+    });
+
+    const source = await loadEpisodeSource({
+      description: notes,
+      transcriptUrl: "https://example.com/full.txt",
+    });
+
+    expect(source.sourceType).toBe("transcript");
+    expect(source.text.length).toBeGreaterThan(80_000);
+    expect(source.text).not.toContain("[Source truncated for length.]");
   });
 
   it("keeps the notes fallback and confidence note when no transcript can be fetched", async () => {

@@ -37,6 +37,24 @@ describe("show page lists the RSS catalog", () => {
   });
 });
 
+describe("briefs come from the full episode transcript", () => {
+  it("stores RSS transcript URLs and does not rescan only 40 feed items", () => {
+    const generate = read("./generate.ts");
+    expect(generate).toContain("episode.transcriptUrl");
+    expect(generate).toContain("audioUrl: episode.audioUrl");
+    expect(generate).not.toContain("fetchRssEpisodes(episode.show.feedUrl, 40)");
+    expect(read("./podcasts.ts")).toContain("transcriptUrl: episode.transcriptUrl");
+  });
+
+  it("labels notes-only briefs instead of pretending they covered the episode", () => {
+    const view = read("../components/BriefView.tsx");
+    expect(view).toContain("Notes-only source");
+    expect(view).toContain("not the entire episode");
+    expect(view).toContain("full episode transcript");
+    expect(read("../app/library/page.tsx")).toContain("notes-only (not the full episode)");
+  });
+});
+
 describe("episode player sits above the summary", () => {
   it("passes the player into BriefView before overview text", () => {
     expect(read("../app/episodes/[id]/page.tsx")).toContain("player={player}");

@@ -88,6 +88,7 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
         episodeId={episode.id}
         hasXaiKey={hasXaiKey()}
         briefLength={nextLength ?? undefined}
+        notesOnly={episode.brief?.sourceType === "shownotes"}
       />
     </div>
   );
