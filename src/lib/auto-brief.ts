@@ -3,9 +3,11 @@ import { hasXaiKey } from "@/lib/env";
 import { generateEpisodeBrief, purgeNotesOnlyBriefs, resolveEpisodeTtsVoice } from "@/lib/generate";
 import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import {
-  AUTO_BRIEF_LIMIT,
   AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
+  isUnfinishedSttJob,
+  orderIdsByPublishedAt,
+  shouldAdvanceOlderEpisode,
   takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
 import { collectWindowedAutoBriefIds, recapNeedsRewrite } from "@/lib/queue";
@@ -49,6 +51,19 @@ export async function generateAutoBriefs(
   }
 
   const prisma = getPrisma();
+  const dated = await prisma.episode.findMany({
+    where: { id: { in: episodeIds } },
+    select: { id: true, publishedAt: true },
+  });
+  const orderedIds = orderIdsByPublishedAt(dated);
+  const jobs = await prisma.sttJob.findMany({
+    where: { episodeId: { in: orderedIds } },
+    select: { episodeId: true, status: true, text: true },
+  });
+  const unfinished = new Set(
+    jobs.filter((job) => isUnfinishedSttJob(job)).map((job) => job.episodeId),
+  );
+
   let generated = 0;
   let skipped = 0;
   let inProgress = 0;
@@ -56,7 +71,7 @@ export async function generateAutoBriefs(
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   const errors: string[] = [];
 
-  for (const id of episodeIds) {
+  for (const id of orderedIds) {
     const episode = await prisma.episode.findUnique({
       where: { id },
       include: { brief: true, recapAudio: true, show: true },
@@ -78,6 +93,14 @@ export async function generateAutoBriefs(
       if (result.reason === "transcript-in-progress" && "sttBusy" in result && result.sttBusy) {
         inProgress += 1;
         progressReason = "transcript-in-progress";
+        if (
+          !shouldAdvanceOlderEpisode({
+            newerHasUnfinishedStt: unfinished.has(id),
+            newerSttBusy: true,
+          })
+        ) {
+          break;
+        }
         continue;
       }
       if (result.reason === "transcript-in-progress" || result.reason === "audio-pending") {
@@ -135,22 +158,18 @@ export async function collectFollowedAutoBriefIds(options?: {
 
   let created = 0;
   let fetched = 0;
-  const autoBriefIds: string[] = [];
   const syncErrors: string[] = [];
 
-  for (const show of shows) {
-    try {
-      if (options?.skipFeedSync) {
-        autoBriefIds.push(...(await collectWindowedAutoBriefIds({ showId: show.id, userId: options.userId })));
-        continue;
+  if (!options?.skipFeedSync) {
+    for (const show of shows) {
+      try {
+        const result = await syncShowEpisodes(show.id, show.feedUrl);
+        created += result.created;
+        fetched += result.fetched;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "RSS sync failed.";
+        syncErrors.push(`${show.title}: ${message}`);
       }
-      const result = await syncShowAndPickAutoBriefs(show.id, show.feedUrl, options?.userId);
-      created += result.created;
-      fetched += result.fetched;
-      autoBriefIds.push(...result.autoBriefIds);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "RSS sync failed.";
-      syncErrors.push(`${show.title}: ${message}`);
     }
   }
 
@@ -159,7 +178,10 @@ export async function collectFollowedAutoBriefIds(options?: {
     fetchedShows: shows.length,
     fetched,
     created,
-    autoBriefIds: [...new Set(autoBriefIds)],
+    autoBriefIds: await collectWindowedAutoBriefIds({
+      userId: options?.userId,
+      showId: options?.showId,
+    }),
     syncErrors,
   };
 }

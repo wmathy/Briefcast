@@ -4,8 +4,12 @@ import {
   AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
+  isUnfinishedSttJob,
+  orderIdsByPublishedAt,
+  shouldAdvanceOlderEpisode,
   takeAutoBriefBatch,
 } from "./auto-brief-policy";
+import { STT_CHUNKS_PER_TURN } from "./stt-job";
 
 describe("episodeNeedsSpokenBrief", () => {
   it("treats a seed brief with no spoken audio as still needing generation", () => {
@@ -30,6 +34,45 @@ describe("takeAutoBriefBatch", () => {
 
   it("dedupes and ignores empty ids", () => {
     expect(takeAutoBriefBatch(["a", "a", ""], 2)).toEqual({ toGenerate: ["a"], remaining: 0 });
+  });
+});
+
+describe("orderIdsByPublishedAt", () => {
+  it("sorts globally newest-first so one show’s backlog cannot bury another show’s latest", () => {
+    expect(
+      orderIdsByPublishedAt([
+        { id: "tucker-old", publishedAt: new Date("2026-08-01T00:00:00.000Z") },
+        { id: "jre-newest", publishedAt: new Date("2026-09-04T18:00:00.000Z") },
+        { id: "tucker-new", publishedAt: new Date("2026-09-03T00:00:00.000Z") },
+        { id: "jre-newest", publishedAt: new Date("2026-09-04T18:00:00.000Z") },
+      ]),
+    ).toEqual(["jre-newest", "tucker-new", "tucker-old"]);
+  });
+});
+
+describe("newest unfinished STT wins over starting an older episode", () => {
+  it("does not start an older episode while the newer job is locked and unfinished", () => {
+    expect(
+      shouldAdvanceOlderEpisode({ newerHasUnfinishedStt: true, newerSttBusy: true }),
+    ).toBe(false);
+    expect(
+      shouldAdvanceOlderEpisode({ newerHasUnfinishedStt: false, newerSttBusy: false }),
+    ).toBe(true);
+  });
+
+  it("treats pending/running jobs as unfinished and complete text as done", () => {
+    expect(isUnfinishedSttJob({ status: "pending", text: "" })).toBe(true);
+    expect(isUnfinishedSttJob({ status: "running", text: "partial" })).toBe(true);
+    expect(isUnfinishedSttJob({ status: "complete", text: "x".repeat(81) })).toBe(false);
+    expect(isUnfinishedSttJob({ status: "failed", text: "nope" })).toBe(false);
+    expect(isUnfinishedSttJob(null)).toBe(false);
+  });
+});
+
+describe("STT chunks per hop", () => {
+  it("runs two 2MB slices per turn and still splits brief+TTS onto the next hop", () => {
+    expect(STT_CHUNKS_PER_TURN).toBe(2);
+    expect(AUTO_BRIEF_LIMIT).toBe(1);
   });
 });
 

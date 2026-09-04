@@ -2,7 +2,8 @@ import { getPrisma } from "@/lib/db";
 import { STT_CHUNK_BYTES } from "@/lib/audio-chunks";
 import { fetchAudioSlice, sttBufferChunk, xaiSttFromAudioUrl, type SttResult } from "@/lib/xai";
 
-export const STT_CHUNKS_PER_TURN = 1;
+/** 2×2MB stays inside 300s with margin. 8MB single slices timed out; 3 chunks (~6MB) is too close. */
+export const STT_CHUNKS_PER_TURN = 2;
 const LOCK_STALE_MS = 6 * 60 * 1000;
 
 export class TranscriptInProgressError extends Error {

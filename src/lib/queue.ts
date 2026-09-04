@@ -1,10 +1,13 @@
 import { getPrisma } from "@/lib/db";
+import { orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
 import {
   AUTO_BRIEF_BACKFILL,
   followWindowStart,
 } from "@/lib/queue-window";
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
+
+export { orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
 
 /** Real generated briefs (written + spoken audio) for followed shows, newest episode first. */
 export async function getFollowedBriefQueue(userId: string) {
@@ -20,11 +23,11 @@ export async function getFollowedBriefQueue(userId: string) {
   });
 }
 
-async function windowedUnbriefedIds(input: {
+async function windowedUnbriefedEpisodes(input: {
   showId: string;
   followedAt: Date;
   ttsVoice?: string | null;
-}): Promise<string[]> {
+}): Promise<{ id: string; publishedAt: Date }[]> {
   const prisma = getPrisma();
   const newest = await prisma.episode.findMany({
     where: { showId: input.showId },
@@ -41,7 +44,9 @@ async function windowedUnbriefedIds(input: {
     orderBy: { publishedAt: "desc" },
     include: { brief: true, recapAudio: true },
   });
-  return rows.filter((row) => recapNeedsRewrite(row, input.ttsVoice)).map((row) => row.id);
+  return rows
+    .filter((row) => recapNeedsRewrite(row, input.ttsVoice))
+    .map((row) => ({ id: row.id, publishedAt: row.publishedAt }));
 }
 
 export async function countUnbriefedFollowedEpisodes(userId: string) {
@@ -52,7 +57,7 @@ export async function countUnbriefedFollowedEpisodes(userId: string) {
   });
   let count = 0;
   for (const follow of follows) {
-    const ids = await windowedUnbriefedIds({
+    const ids = await windowedUnbriefedEpisodes({
       showId: follow.showId,
       followedAt: follow.createdAt,
       ttsVoice: follow.ttsVoice,
@@ -81,16 +86,22 @@ export async function collectWindowedAutoBriefIds(input: {
     if (!current || follow.createdAt < current.followedAt) {
       earliest.set(follow.showId, {
         followedAt: follow.createdAt,
-        ttsVoice: input.userId ? follow.ttsVoice : follow.ttsVoice,
+        ttsVoice: follow.ttsVoice,
       });
     }
   }
 
-  const ids: string[] = [];
+  const items: { id: string; publishedAt: Date }[] = [];
   for (const [showId, meta] of earliest) {
-    ids.push(...(await windowedUnbriefedIds({ showId, followedAt: meta.followedAt, ttsVoice: meta.ttsVoice })));
+    items.push(
+      ...(await windowedUnbriefedEpisodes({
+        showId,
+        followedAt: meta.followedAt,
+        ttsVoice: meta.ttsVoice,
+      })),
+    );
   }
-  return [...new Set(ids)];
+  return orderIdsByPublishedAt(items);
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {

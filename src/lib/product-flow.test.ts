@@ -29,6 +29,10 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("../../vercel.json")).toContain("15 8 * * *");
     expect(read("./generate.ts")).toContain("markShowBriefed");
     expect(read("./xai.ts")).toContain("attempt <= 3");
+    expect(read("./stt-job.ts")).toContain("STT_CHUNKS_PER_TURN = 2");
+    expect(read("./stt-job.ts")).toContain("Even the last chunk returns in-progress");
+    expect(read("./queue.ts")).toContain("orderIdsByPublishedAt");
+    expect(read("./auto-brief.ts")).toContain("shouldAdvanceOlderEpisode");
   });
 });
 
