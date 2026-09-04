@@ -21,6 +21,7 @@ import {
 import { mp3PlaybackDurationSeconds } from "@/lib/tts";
 import { TranscriptInProgressError } from "@/lib/stt-job";
 import { recapNeedsRewrite } from "@/lib/queue";
+import { markShowBriefed } from "@/lib/brief-ledger";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
 export async function resolveEpisodeTtsVoice(showId: string, userId?: string): Promise<string> {
@@ -225,6 +226,7 @@ export async function generateEpisodeBrief(
   if (reusePlan === "tts-only" && episode.brief) {
     return persistRecapAudioAfterTts({
       episodeId: episode.id,
+      showId: episode.showId,
       spoken: episode.brief.spokenRecap,
       briefLength: parseBriefLength(episode.brief.briefLength ?? briefLength),
       sourceLimited: episode.brief.sourceLimited,
@@ -392,6 +394,7 @@ export async function generateEpisodeBrief(
 
 async function persistRecapAudioAfterTts(input: {
   episodeId: string;
+  showId: string;
   spoken: string;
   briefLength: BriefLength;
   sourceLimited: boolean;
@@ -433,6 +436,7 @@ async function persistRecapAudioAfterTts(input: {
       voiceId,
     },
   });
+  await markShowBriefed(input.showId, input.episodeId);
 
   return {
     episodeId: input.episodeId,

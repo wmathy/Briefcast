@@ -32,9 +32,11 @@ model Show {
 model Follow {
   userId      String
   showId      String
-  briefLength String   @default("medium")
-  ttsVoice    String   @default("eve")
-  createdAt   DateTime @default(now())
+  briefLength          String    @default("medium")
+  ttsVoice             String    @default("eve")
+  lastBriefedEpisodeId String?
+  lastBriefedAt        DateTime?
+  createdAt            DateTime  @default(now())
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   show        Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
 

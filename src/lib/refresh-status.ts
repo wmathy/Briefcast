@@ -9,6 +9,8 @@ export type RefreshResult = {
   reason?: string | null;
   error?: string;
   errors?: string[];
+  continuing?: boolean;
+  progressed?: boolean;
 };
 
 export function refreshStatusLabel(data: RefreshResult): string {
@@ -55,6 +57,7 @@ export function refreshHasMore(data: RefreshResult): boolean {
 }
 
 export function refreshShouldContinue(status: number, data: RefreshResult): boolean {
+  if (data.continuing) return false;
   if (status === 504 || status === 502) return true;
   if (data.reason === "transcript-in-progress") return true;
   return refreshHasMore(data);

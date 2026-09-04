@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
 import { refreshFollowedBriefs } from "@/lib/auto-brief";
+import { requestOrigin, schedulePipelineHopIfNeeded } from "@/lib/pipeline-hop";
 import { upsertShowFromItunes } from "@/lib/podcasts";
 import { parseBriefLength } from "@/lib/brief-length";
 
@@ -46,6 +47,12 @@ export async function POST(request: Request) {
 
   try {
     const result = await refreshFollowedBriefs({ userId: user.id, showId: show.id });
+    const continuing = schedulePipelineHopIfNeeded(result, {
+      origin: requestOrigin(request),
+      hop: 0,
+      userId: user.id,
+      showId: show.id,
+    });
     const warning =
       result.reason === "missing-xai-key"
         ? "Followed. Add XAI_API_KEY to write the latest brief automatically."
@@ -57,6 +64,8 @@ export async function POST(request: Request) {
       created: result.created,
       generated: result.generated,
       remaining: result.remaining,
+      progressed: result.progressed,
+      continuing,
       errors: result.errors,
       warning,
     });

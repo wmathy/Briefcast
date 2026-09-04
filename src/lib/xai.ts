@@ -53,31 +53,40 @@ async function xaiTtsMp3Chunk(text: string, speed: number, voiceId: string): Pro
   }
 
   const key = requireXaiKey();
-  const response = await fetch(`${XAI_API_BASE}/tts`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      text,
-      voice_id: voiceId,
-      language: "en",
-      speed,
-      output_format: {
-        codec: "mp3",
-        sample_rate: 44100,
-        bit_rate: 128000,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`xAI TTS error ${response.status}: ${body.slice(0, 280)}`);
+  let lastError = "xAI TTS failed.";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(`${XAI_API_BASE}/tts`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text,
+          voice_id: voiceId,
+          language: "en",
+          speed,
+          output_format: {
+            codec: "mp3",
+            sample_rate: 44100,
+            bit_rate: 128000,
+          },
+        }),
+      });
+      if (response.ok) {
+        return Buffer.from(await response.arrayBuffer());
+      }
+      const body = await response.text();
+      lastError = `xAI TTS error ${response.status}: ${body.slice(0, 280)}`;
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        break;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "xAI TTS failed.";
+    }
   }
-
-  return Buffer.from(await response.arrayBuffer());
+  throw new Error(lastError);
 }
 
 export function formatDiarizedTranscript(result: {

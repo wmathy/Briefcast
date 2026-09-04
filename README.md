@@ -31,7 +31,7 @@ Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATAB
 | `AUTH_SECRET` | Recommended | Signs the login cookie. A long random string is fine. |
 | `RECOVERY_SECRET` | For password recovery | Shared secret for `/forgot-password`. If unset, recovery is disabled. No email is sent. |
 | `DATABASE_URL` | Local: optional. **Vercel: required** | Local default is `file:./prisma/dev.db` (SQLite via Prisma). On Vercel set a hosted **Postgres** URL (Neon or any Postgres). SQLite under `/tmp` is not shared across serverless instances, so Follow would 404 on `/shows/[id]`. |
-| `CRON_SECRET` | Vercel cron | Vercel sets this for `/api/cron/poll-episodes` (daily RSS poll of followed shows). Local calls work without it. |
+| `CRON_SECRET` | Vercel cron | Vercel sets this for `/api/cron/poll-episodes` (weekday RSS poll of followed shows) and `/api/cron/continue` hops. Local calls work without it. |
 
 TTS is **Grok Voice / xAI only**. Briefcast does not use edge-tts or any other synthesizer.
 
@@ -47,7 +47,7 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 ## Deploy on Vercel
 
-This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief write that recap in-request. A daily production cron polls followed-show RSS as well (Vercel cron does not run on Preview).
+This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief write that recap in-request. Production cron wakes weekdays at ~8am America/Chicago (`0 13 * * 1-5` UTC), diffs each follow’s latest episode against the last-briefed ledger, and self-chains `/api/cron/continue` hops so STT + brief + TTS finish across many 300s invocations (Hobby plans cannot add extra crons). Vercel cron does not run on Preview — Check starts the same hop chain.
 
 1. Import [github.com/wmathy/Briefcast](https://github.com/wmathy/Briefcast) in Vercel.
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.

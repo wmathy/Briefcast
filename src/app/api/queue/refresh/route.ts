@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import { hasXaiKey } from "@/lib/env";
+import { requestOrigin, schedulePipelineHopIfNeeded } from "@/lib/pipeline-hop";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
 
   try {
     const result = await refreshFollowedBriefs({ userId: user.id, skipFeedSync });
+    const continuing = schedulePipelineHopIfNeeded(result, {
+      origin: requestOrigin(request),
+      hop: 0,
+      userId: user.id,
+    });
     return NextResponse.json({
       created: result.created,
       fetchedShows: result.fetchedShows,
@@ -23,6 +29,8 @@ export async function POST(request: Request) {
       generated: result.generated,
       remaining: result.remaining,
       skipped: result.skipped,
+      progressed: result.progressed,
+      continuing,
       canGenerate: hasXaiKey(),
       reason: result.reason,
       errors: result.errors,

@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { hasXaiKey } from "@/lib/env";
-import { generateEpisodeBrief, purgeNotesOnlyBriefs } from "@/lib/generate";
+import { generateEpisodeBrief, purgeNotesOnlyBriefs, resolveEpisodeTtsVoice } from "@/lib/generate";
 import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import {
   AUTO_BRIEF_LIMIT,
@@ -41,6 +41,8 @@ export async function generateAutoBriefs(
       attempted: 0,
       generated: 0,
       skipped: episodeIds.length,
+      inProgress: 0,
+      progressed: false,
       errors: [] as string[],
       reason: "missing-xai-key" as const,
     };
@@ -50,6 +52,7 @@ export async function generateAutoBriefs(
   let generated = 0;
   let skipped = 0;
   let inProgress = 0;
+  let progressed = false;
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   const errors: string[] = [];
 
@@ -62,12 +65,16 @@ export async function generateAutoBriefs(
       errors.push(`Episode ${id} was not found.`);
       continue;
     }
-    if (!episodeNeedsSpokenBrief(episode) && !recapNeedsRewrite(episode)) {
+    const requestedVoice = await resolveEpisodeTtsVoice(episode.showId, options?.userId);
+    if (!episodeNeedsSpokenBrief(episode) && !recapNeedsRewrite(episode, requestedVoice)) {
       skipped += 1;
       continue;
     }
     try {
-      const result = await generateEpisodeBrief(id, { userId: options?.userId, force: recapNeedsRewrite(episode) });
+      const result = await generateEpisodeBrief(id, {
+        userId: options?.userId,
+        force: recapNeedsRewrite(episode, requestedVoice),
+      });
       if (result.reason === "transcript-in-progress" && "sttBusy" in result && result.sttBusy) {
         inProgress += 1;
         progressReason = "transcript-in-progress";
@@ -75,11 +82,13 @@ export async function generateAutoBriefs(
       }
       if (result.reason === "transcript-in-progress" || result.reason === "audio-pending") {
         inProgress += 1;
+        progressed = true;
         progressReason = result.reason;
         break;
       }
       if (result.published) {
         generated += 1;
+        progressed = true;
         break;
       }
       skipped += 1;
@@ -99,6 +108,7 @@ export async function generateAutoBriefs(
     generated,
     skipped,
     inProgress,
+    progressed,
     errors,
     reason:
       progressReason ??
