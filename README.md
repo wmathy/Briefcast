@@ -49,6 +49,8 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief write that recap in-request. Production cron wakes daily (`15 8 * * *` UTC; Hobby rejects weekday-only expressions), diffs each follow’s latest episode against the last-briefed ledger, and self-chains `/api/pipeline/continue` hops so STT + brief + TTS finish across many 300s invocations (Hobby plans cannot add extra crons). Vercel cron does not run on Preview — Check starts the same hop chain.
 
+Preview redeploy note (no product change): Neon org upgraded to Launch so this branch can rebuild against `DATABASE_URL`.
+
 1. Import [github.com/wmathy/Briefcast](https://github.com/wmathy/Briefcast) in Vercel.
 2. Set `AUTH_SECRET` and, for live generation, `XAI_API_KEY`.
 3. To recover an existing account without email, set `RECOVERY_SECRET` (a long random string) on **Production and Preview**. Then **Redeploy**. After that, open **Log in → Forgot password** (`/forgot-password`), enter the account email, a new password, and that secret.
