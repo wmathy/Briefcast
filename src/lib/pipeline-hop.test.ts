@@ -40,7 +40,7 @@ describe("pipelineHopUrl", () => {
         showId: "show-1",
       }),
     ).toBe(
-      "https://briefcast-git-preview.vercel.app/api/cron/continue?hop=2&userId=user-1&showId=show-1",
+      "https://briefcast-git-preview.vercel.app/api/pipeline/continue?hop=2&userId=user-1&showId=show-1",
     );
     expect(PIPELINE_MAX_HOPS).toBe(80);
   });

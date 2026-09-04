@@ -30,7 +30,7 @@ export function pipelineHopUrl(input: {
   userId?: string;
   showId?: string;
 }): string {
-  const url = new URL("/api/cron/continue", input.origin);
+  const url = new URL("/api/pipeline/continue", input.origin);
   url.searchParams.set("hop", String(input.hop));
   if (input.userId) url.searchParams.set("userId", input.userId);
   if (input.showId) url.searchParams.set("showId", input.showId);
