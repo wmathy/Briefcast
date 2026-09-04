@@ -21,12 +21,12 @@ describe("automatic brief generation is one awaited pipeline", () => {
     }
   });
 
-  it("chains remaining work through /api/cron/continue instead of waiting for Check", () => {
+  it("chains remaining work through /api/pipeline/continue instead of waiting for Check", () => {
     const continueRoute = read("../app/api/pipeline/continue/route.ts");
     expect(continueRoute).toContain("skipFeedSync: true");
     expect(continueRoute).toContain("refreshFollowedBriefs");
     expect(continueRoute).toContain("dispatchPipelineHop");
-    expect(read("../../vercel.json")).toContain("15 8 * * *");
+    expect(read("../../vercel.json")).toContain("0 8 * * *");
     expect(read("./generate.ts")).toContain("markShowBriefed");
     expect(read("./xai.ts")).toContain("attempt <= 3");
   });
