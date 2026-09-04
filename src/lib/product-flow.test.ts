@@ -26,7 +26,7 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(continueRoute).toContain("skipFeedSync: true");
     expect(continueRoute).toContain("refreshFollowedBriefs");
     expect(continueRoute).toContain("dispatchPipelineHop");
-    expect(read("../../vercel.json")).toContain("0 13 * * 1-5");
+    expect(read("../../vercel.json")).toContain("0 13 * * *");
     expect(read("./generate.ts")).toContain("markShowBriefed");
     expect(read("./xai.ts")).toContain("attempt <= 3");
   });
