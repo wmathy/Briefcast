@@ -56,6 +56,8 @@ export default async function LibraryPage() {
             {follows.length === 0 ? "Follow a show" : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
           </div>
         ) : (
+          <>
+          <p className="text-xs text-muted">Ready to play</p>
           <ul className="space-y-3">
             {queue.map((episode) => (
               <li key={episode.id}>
@@ -70,6 +72,7 @@ export default async function LibraryPage() {
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
 

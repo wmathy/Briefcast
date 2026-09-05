@@ -36,6 +36,7 @@ describe("library homepage queue", () => {
     expect(source).toContain("countUnbriefedFollowedEpisodes");
     expect(source).toContain("waiting");
     expect(source).toContain("getFollowedBriefQueue");
+    expect(source).toContain("Ready to play");
   });
 });
 
