@@ -10,6 +10,7 @@ export type WindowedBriefWork = {
   id: string;
   publishedAt: Date;
   kind: AutoBriefKind;
+  hasSource: boolean;
 };
 
 export function isPublishedReadyBrief(episode: {
@@ -45,11 +46,12 @@ async function latestFollowedWork(input: {
     include: { brief: true, recapAudio: true },
   });
   if (!row) return null;
+  const hasSource = Boolean(row.audioUrl || row.transcriptUrl);
   if (!isPublishedReadyBrief(row)) {
-    return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed" };
+    return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed", hasSource };
   }
   if (recapNeedsRewrite(row, input.ttsVoice, input.briefLength)) {
-    return { id: row.id, publishedAt: row.publishedAt, kind: "rewrite" };
+    return { id: row.id, publishedAt: row.publishedAt, kind: "rewrite", hasSource };
   }
   return null;
 }
@@ -102,7 +104,10 @@ export async function collectWindowedAutoBriefIds(input: {
   userId?: string;
   showId?: string;
 }): Promise<string[]> {
-  return takeSingleNewestWork(orderAutoBriefQueue(await collectWindowedFollowedWork(input)));
+  const items = await collectWindowedFollowedWork(input);
+  const ordered = orderAutoBriefQueue(items);
+  const withSource = orderAutoBriefQueue(items.filter((item) => item.hasSource));
+  return takeSingleNewestWork(withSource.length > 0 ? withSource : ordered);
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {
