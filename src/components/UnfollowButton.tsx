@@ -1,20 +1,29 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export function UnfollowButton({ showId }: { showId: string }) {
   const router = useRouter();
+  const [pending, setPending] = useState(false);
   return (
     <button
       type="button"
-      className="text-sm text-muted underline-offset-2 hover:text-danger hover:underline"
+      disabled={pending}
+      aria-busy={pending}
+      className="tap pressable rounded-full border border-line px-3 text-sm text-ink/80 disabled:opacity-60"
       onClick={async () => {
-        await fetch(`/api/follows/${showId}`, { method: "DELETE" });
-        router.push("/library");
-        router.refresh();
+        setPending(true);
+        try {
+          await fetch(`/api/follows/${showId}`, { method: "DELETE" });
+          router.push("/library");
+          router.refresh();
+        } finally {
+          setPending(false);
+        }
       }}
     >
-      Unfollow
+      {pending ? "Unfollowing…" : "Unfollow"}
     </button>
   );
 }

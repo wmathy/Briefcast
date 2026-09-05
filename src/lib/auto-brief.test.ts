@@ -1,118 +1,92 @@
 import { describe, expect, it } from "vitest";
 import {
   AUTO_BRIEF_LIMIT,
-  collectAutoBriefJobs,
+  AUTO_BRIEF_LOOKAHEAD,
+  episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
-  pickAutoBriefEpisodeIds,
+  isUnfinishedSttJob,
+  orderAutoBriefQueue,
+  orderIdsByPublishedAt,
+  shouldAdvanceOlderEpisode,
+  takeAutoBriefBatch,
 } from "./auto-brief-policy";
+import { STT_CHUNKS_PER_TURN } from "./stt-job";
 
-const older = new Date("2026-08-01T00:00:00.000Z");
-const newer = new Date("2026-09-01T00:00:00.000Z");
-
-describe("pickAutoBriefEpisodeIds", () => {
-  it("on first follow, generates only the newest imported episode", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: true,
-        newlyCreated: [
-          { id: "old", publishedAt: older },
-          { id: "new", publishedAt: newer },
-        ],
-        latestUnbriefedId: "old",
-      }),
-    ).toEqual(["new"]);
-  });
-
-  it("on first follow with an empty feed, uses the latest unbriefed episode if one exists", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: true,
-        newlyCreated: [],
-        latestUnbriefedId: "already-there",
-      }),
-    ).toEqual(["already-there"]);
-  });
-
-  it("after a show is already synced, generates newly published episodes newest first", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [
-          { id: "old", publishedAt: older },
-          { id: "new", publishedAt: newer },
-        ],
-        latestUnbriefedId: "new",
-        limit: 2,
-      }),
-    ).toEqual(["new", "old"]);
-  });
-
-  it("when no new RSS items appear, backfills the latest episode that still has no brief", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [],
-        latestUnbriefedId: "latest-without-brief",
-      }),
-    ).toEqual(["latest-without-brief"]);
-  });
-
-  it("does not pick anything when there is nothing new and every episode already has a brief", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [],
-        latestUnbriefedId: null,
-      }),
-    ).toEqual([]);
-  });
-
-  it("caps how many briefs one poll will start", () => {
-    expect(
-      pickAutoBriefEpisodeIds({
-        initialImport: false,
-        newlyCreated: [
-          { id: "a", publishedAt: newer },
-          { id: "b", publishedAt: older },
-          { id: "c", publishedAt: new Date("2026-07-01T00:00:00.000Z") },
-        ],
-        latestUnbriefedId: null,
-        limit: AUTO_BRIEF_LIMIT,
-      }),
-    ).toHaveLength(AUTO_BRIEF_LIMIT);
+describe("episodeNeedsSpokenBrief", () => {
+  it("treats a seed brief with no spoken audio as still needing generation", () => {
+    expect(episodeNeedsSpokenBrief({ brief: { id: "seed" }, recapAudio: null })).toBe(true);
+    expect(episodeNeedsSpokenBrief({ brief: { id: "real", sourceType: "transcript" }, recapAudio: { id: "mp3" } })).toBe(
+      false,
+    );
+    expect(episodeNeedsSpokenBrief({ brief: { id: "notes", sourceType: "shownotes" }, recapAudio: { id: "mp3" } })).toBe(
+      true,
+    );
   });
 });
 
-describe("collectAutoBriefJobs", () => {
-  it("walks every followed show and caps the global generate list", () => {
-    const ids = collectAutoBriefJobs(
-      [
-        {
-          existingEpisodeCount: 4,
-          createdEpisodes: [{ id: "show-a-new", publishedAt: newer }],
-          latestUnbriefedId: "show-a-new",
-        },
-        {
-          existingEpisodeCount: 0,
-          createdEpisodes: [
-            { id: "show-b-old", publishedAt: older },
-            { id: "show-b-new", publishedAt: newer },
-          ],
-          latestUnbriefedId: "show-b-new",
-        },
-        {
-          existingEpisodeCount: 8,
-          createdEpisodes: [],
-          latestUnbriefedId: "show-c-latest",
-        },
-      ],
-      2,
-    );
-    expect(ids).toEqual(["show-a-new", "show-b-new"]);
+describe("takeAutoBriefBatch", () => {
+  it("does not silently drop extra shows — leftover ids are remaining", () => {
+    const batch = takeAutoBriefBatch(["a", "b", "c", "d", "e"], 3);
+    expect(batch.toGenerate).toEqual(["a", "b", "c"]);
+    expect(batch.remaining).toBe(2);
+    expect(AUTO_BRIEF_LIMIT).toBe(1);
+    expect(AUTO_BRIEF_LOOKAHEAD).toBe(1);
   });
 
-  it("does not invent jobs for shows nobody follows (empty input)", () => {
-    expect(collectAutoBriefJobs([])).toEqual([]);
+  it("dedupes and ignores empty ids", () => {
+    expect(takeAutoBriefBatch(["a", "a", ""], 2)).toEqual({ toGenerate: ["a"], remaining: 0 });
+  });
+});
+
+describe("orderIdsByPublishedAt", () => {
+  it("sorts globally newest-first so one show’s backlog cannot bury another show’s latest", () => {
+    expect(
+      orderIdsByPublishedAt([
+        { id: "tucker-old", publishedAt: new Date("2026-08-01T00:00:00.000Z") },
+        { id: "jre-newest", publishedAt: new Date("2026-09-04T18:00:00.000Z") },
+        { id: "tucker-new", publishedAt: new Date("2026-09-03T00:00:00.000Z") },
+        { id: "jre-newest", publishedAt: new Date("2026-09-04T18:00:00.000Z") },
+      ]),
+    ).toEqual(["jre-newest", "tucker-new", "tucker-old"]);
+  });
+});
+
+describe("orderAutoBriefQueue", () => {
+  it("briefs never-published newest episodes before Ready length/voice rewrites", () => {
+    expect(
+      orderAutoBriefQueue([
+        { id: "mma-185-ready", publishedAt: new Date("2026-09-02T00:00:00.000Z"), kind: "rewrite" },
+        { id: "jre-2549", publishedAt: new Date("2026-09-03T00:00:00.000Z"), kind: "unbriefed" },
+        { id: "tucker-newest", publishedAt: new Date("2026-09-04T00:00:00.000Z"), kind: "unbriefed" },
+        { id: "jre-2548-ready", publishedAt: new Date("2026-09-01T00:00:00.000Z"), kind: "rewrite" },
+      ]),
+    ).toEqual(["tucker-newest", "jre-2549", "mma-185-ready", "jre-2548-ready"]);
+  });
+});
+
+describe("newest unfinished STT wins over starting an older episode", () => {
+  it("does not start an older episode while the newer job is locked and unfinished", () => {
+    expect(
+      shouldAdvanceOlderEpisode({ newerHasUnfinishedStt: true, newerSttBusy: true }),
+    ).toBe(false);
+    expect(
+      shouldAdvanceOlderEpisode({ newerHasUnfinishedStt: false, newerSttBusy: false }),
+    ).toBe(true);
+  });
+
+  it("treats pending/running jobs as unfinished and complete text as done", () => {
+    expect(isUnfinishedSttJob({ status: "pending", text: "" })).toBe(true);
+    expect(isUnfinishedSttJob({ status: "running", text: "partial" })).toBe(true);
+    expect(isUnfinishedSttJob({ status: "complete", text: "x".repeat(81) })).toBe(false);
+    expect(isUnfinishedSttJob({ status: "failed", text: "nope" })).toBe(false);
+    expect(isUnfinishedSttJob(null)).toBe(false);
+  });
+});
+
+describe("STT chunks per hop", () => {
+  it("runs two 2MB slices per turn and still splits brief+TTS onto the next hop", () => {
+    expect(STT_CHUNKS_PER_TURN).toBe(2);
+    expect(AUTO_BRIEF_LIMIT).toBe(1);
   });
 });
 

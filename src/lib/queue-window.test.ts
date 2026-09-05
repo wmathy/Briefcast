@@ -1,0 +1,142 @@
+import { describe, expect, it } from "vitest";
+import {
+  AUTO_BRIEF_BACKFILL,
+  episodeIsInBriefWindow,
+  followWindowStart,
+  takeSingleNewestWork,
+} from "./queue-window";
+import { recapNeedsRewrite } from "./queue";
+import { assertRecapInBand, recapAudioInBand, RecapBandError } from "./brief-length";
+
+describe("brief window", () => {
+  it("auto-briefs only the single newest episode, not a 5-show backfill", () => {
+    expect(AUTO_BRIEF_BACKFILL).toBe(1);
+    const followedAt = new Date("2026-09-01T15:00:00.000Z");
+    expect(followWindowStart(followedAt).toISOString()).toBe("2026-09-01T00:00:00.000Z");
+
+    const newestIds = ["tucker-newest"];
+    expect(
+      episodeIsInBriefWindow({
+        episodeId: "jre-2549",
+        publishedAt: new Date("2026-09-03T00:00:00.000Z"),
+        followedAt,
+        newestIds,
+      }),
+    ).toBe(false);
+    expect(
+      episodeIsInBriefWindow({
+        episodeId: "tucker-newest",
+        publishedAt: new Date("2026-09-04T00:00:00.000Z"),
+        followedAt,
+        newestIds,
+      }),
+    ).toBe(true);
+    expect(takeSingleNewestWork(["tucker-newest", "jre-2549"])).toEqual(["tucker-newest"]);
+    expect(takeSingleNewestWork([])).toEqual([]);
+  });
+});
+
+describe("recapNeedsRewrite", () => {
+  it("does not treat the full RSS archive as pending work when a real Medium recap exists", () => {
+    expect(
+      recapNeedsRewrite({
+        brief: {
+          sourceType: "transcript",
+          spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+          briefLength: "medium",
+          sourceLimited: false,
+        },
+        recapAudio: { durationSeconds: 10 * 60 },
+      }),
+    ).toBe(false);
+  });
+
+  it("re-queues audio when the follow voice no longer matches the stored recap", () => {
+    expect(
+      recapNeedsRewrite(
+        {
+          brief: {
+            sourceType: "transcript",
+            spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+            briefLength: "medium",
+            sourceLimited: false,
+          },
+          recapAudio: { durationSeconds: 10 * 60, voiceId: "eve" },
+        },
+        "ara",
+      ),
+    ).toBe(true);
+    expect(
+      recapNeedsRewrite(
+        {
+          brief: {
+            sourceType: "transcript",
+            spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+            briefLength: "medium",
+            sourceLimited: false,
+          },
+          recapAudio: { durationSeconds: 10 * 60, voiceId: "ara" },
+        },
+        "ara",
+      ),
+    ).toBe(false);
+  });
+
+  it("rewrites a published brief whose spoken recap is far below the band", () => {
+    expect(
+      recapNeedsRewrite({
+        brief: {
+          sourceType: "transcript",
+          spokenRecap: "Joe and Jesse open with a UFO clip.",
+          briefLength: "medium",
+          sourceLimited: false,
+        },
+        recapAudio: { durationSeconds: 98 },
+      }),
+    ).toBe(true);
+  });
+
+  it("does not re-queue a Ready recap whose playable audio is in band", () => {
+    expect(
+      recapNeedsRewrite({
+        brief: {
+          sourceType: "transcript",
+          spokenRecap: Array.from({ length: 1900 }, (_, i) => `word${i}`).join(" "),
+          briefLength: "medium",
+          sourceLimited: false,
+        },
+        recapAudio: { durationSeconds: 9 * 60 + 4, voiceId: "eve" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rewrites Ready audio when follow length or voice actually changed", () => {
+    const ready = {
+      brief: {
+        sourceType: "transcript" as const,
+        spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+        briefLength: "medium",
+        sourceLimited: false,
+      },
+      recapAudio: { durationSeconds: 9 * 60 + 4, voiceId: "eve" },
+    };
+    expect(recapNeedsRewrite(ready, "eve", "long")).toBe(true);
+    expect(recapNeedsRewrite(ready, "ara", "medium")).toBe(true);
+    expect(recapNeedsRewrite(ready, "eve", "medium")).toBe(false);
+  });
+});
+
+describe("recap audio band", () => {
+  it("accepts Medium audio inside 8–12 minutes and rejects 1:38", () => {
+    expect(recapAudioInBand(98, "medium")).toBe(false);
+    expect(recapAudioInBand(10 * 60, "medium")).toBe(true);
+    expect(() =>
+      assertRecapInBand({
+        spokenText: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+        audioSeconds: 98,
+        length: "medium",
+        sourceLimited: false,
+      }),
+    ).toThrow(RecapBandError);
+  });
+});

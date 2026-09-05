@@ -7,23 +7,24 @@ export default async function HomePage() {
   if (user) redirect("/library");
 
   return (
-    <div className="mx-auto max-w-2xl space-y-10">
-      <p className="text-xs uppercase tracking-[0.22em] text-accent">For friends who miss episodes</p>
+    <div className="mx-auto max-w-2xl space-y-8">
       <h1 className="font-display text-5xl leading-[1.05] text-ink sm:text-6xl">
-        Your shows. A faithful brief. A spoken recap.
+        Your shows. A brief. A spoken recap.
       </h1>
       <p className="max-w-xl text-lg leading-8 text-muted">
-        Search the podcasts you already follow. When a new episode lands, Briefcast writes a
-        source-grounded brief and reads it in Grok Voice. No catalog we picked for you. No email.
+        Follow podcasts you already listen to. New episodes get a written brief and a voice recap.
       </p>
       <div className="flex flex-wrap gap-3">
         <Link
           href="/signup"
-          className="rounded-full bg-accent px-5 py-2.5 font-medium text-bg hover:bg-accent-deep"
+          className="tap pressable inline-flex items-center rounded-full bg-accent px-5 font-medium text-bg"
         >
-          Create an account
+          Sign up
         </Link>
-        <Link href="/login" className="rounded-full border border-line px-5 py-2.5 hover:border-accent">
+        <Link
+          href="/login"
+          className="tap pressable inline-flex items-center rounded-full border border-line px-5"
+        >
           Log in
         </Link>
       </div>

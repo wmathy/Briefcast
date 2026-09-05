@@ -43,27 +43,9 @@ async function main() {
       },
     });
 
-    await prisma.brief.upsert({
-      where: { episodeId: episode.id },
-      update: {
-        overview: episode.brief.overview,
-        segmentsJson: JSON.stringify(episode.brief.segments),
-        takeawaysJson: JSON.stringify(episode.brief.takeaways),
-        spokenRecap: episode.brief.spokenRecap,
-        sourceType: episode.brief.sourceType,
-        confidenceNote: episode.brief.confidenceNote,
-        guest: episode.brief.guest,
-      },
-      create: {
-        episodeId: episode.id,
-        overview: episode.brief.overview,
-        segmentsJson: JSON.stringify(episode.brief.segments),
-        takeawaysJson: JSON.stringify(episode.brief.takeaways),
-        spokenRecap: episode.brief.spokenRecap,
-        sourceType: episode.brief.sourceType,
-        confidenceNote: episode.brief.confidenceNote,
-        guest: episode.brief.guest,
-      },
+    await prisma.recapAudio.deleteMany({ where: { episodeId: episode.id } });
+    await prisma.brief.deleteMany({
+      where: { episodeId: episode.id, sourceType: { not: "transcript" } },
     });
   }
 

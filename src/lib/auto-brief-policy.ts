@@ -1,55 +1,64 @@
-/** Cap generations per poll so a cron/request stays inside function time limits. */
-export const AUTO_BRIEF_LIMIT = 2;
+/** Max heavy STT/TTS jobs one request runs. Locked episodes are skipped first. */
+export const AUTO_BRIEF_LIMIT = 1;
+export const AUTO_BRIEF_LOOKAHEAD = 1;
 
-export type CreatedEpisodeRef = {
-  id: string;
-  publishedAt: Date;
-};
+export type AutoBriefKind = "unbriefed" | "rewrite";
 
-export type AutoBriefPickInput = {
-  initialImport: boolean;
-  newlyCreated: CreatedEpisodeRef[];
-  latestUnbriefedId: string | null;
-  limit?: number;
-};
-
-export function pickAutoBriefEpisodeIds(input: AutoBriefPickInput): string[] {
-  const limit = input.limit ?? AUTO_BRIEF_LIMIT;
-  const newestCreated = [...input.newlyCreated].sort(
-    (a, b) => b.publishedAt.getTime() - a.publishedAt.getTime(),
-  );
-
-  if (input.initialImport) {
-    const id = newestCreated[0]?.id ?? input.latestUnbriefedId;
-    return id ? [id].slice(0, limit) : [];
-  }
-
-  const ids = newestCreated.map((episode) => episode.id);
-  if (ids.length === 0 && input.latestUnbriefedId) {
-    ids.push(input.latestUnbriefedId);
-  }
-  return [...new Set(ids)].slice(0, limit);
+export function orderIdsByPublishedAt(
+  items: { id: string; publishedAt: Date | number }[],
+): string[] {
+  return [...items]
+    .filter((item) => Boolean(item.id))
+    .sort((a, b) => {
+      const tb = typeof b.publishedAt === "number" ? b.publishedAt : b.publishedAt.getTime();
+      const ta = typeof a.publishedAt === "number" ? a.publishedAt : a.publishedAt.getTime();
+      return tb - ta;
+    })
+    .map((item) => item.id)
+    .filter((id, index, all) => all.indexOf(id) === index);
 }
 
-export function collectAutoBriefJobs(
-  shows: Array<{
-    existingEpisodeCount: number;
-    createdEpisodes: CreatedEpisodeRef[];
-    latestUnbriefedId: string | null;
-  }>,
-  limit = AUTO_BRIEF_LIMIT,
+/** Never-briefed newest first; Ready length/voice rewrites only after that backlog. */
+export function orderAutoBriefQueue(
+  items: { id: string; publishedAt: Date | number; kind: AutoBriefKind }[],
 ): string[] {
-  const ids: string[] = [];
-  for (const show of shows) {
-    ids.push(
-      ...pickAutoBriefEpisodeIds({
-        initialImport: show.existingEpisodeCount === 0,
-        newlyCreated: show.createdEpisodes,
-        latestUnbriefedId: show.latestUnbriefedId,
-      }),
-    );
+  const unbriefed = orderIdsByPublishedAt(items.filter((item) => item.kind === "unbriefed"));
+  const rewrite = orderIdsByPublishedAt(items.filter((item) => item.kind === "rewrite"));
+  return [...unbriefed, ...rewrite.filter((id) => !unbriefed.includes(id))];
+}
+
+export function isUnfinishedSttJob(job: { status: string; text?: string | null } | null | undefined): boolean {
+  if (!job) return false;
+  if (job.status === "failed") return false;
+  if (job.status === "complete" && (job.text?.length ?? 0) > 80) return false;
+  return true;
+}
+
+/** Do not start STT on an older episode while a newer unfinished job is locked. */
+export function shouldAdvanceOlderEpisode(input: {
+  newerHasUnfinishedStt: boolean;
+  newerSttBusy: boolean;
+}): boolean {
+  if (input.newerHasUnfinishedStt) return false;
+  return !input.newerSttBusy;
+}
+
+export function episodeNeedsSpokenBrief(episode: {
+  brief?: { sourceType?: string | null } | null;
+  recapAudio?: unknown;
+}): boolean {
+  if (!episode.brief || episode.brief.sourceType !== "transcript" || !episode.recapAudio) {
+    return true;
   }
-  return [...new Set(ids)].slice(0, limit);
+  return false;
+}
+
+export function takeAutoBriefBatch(ids: string[], limit = AUTO_BRIEF_LIMIT) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  return {
+    toGenerate: unique.slice(0, limit),
+    remaining: Math.max(0, unique.length - limit),
+  };
 }
 
 export function isCronRequestAuthorized(request: Request): boolean {
@@ -58,6 +67,5 @@ export function isCronRequestAuthorized(request: Request): boolean {
   if (secret) {
     return header === `Bearer ${secret}`;
   }
-  // Unset secret: allow local/dev only. On Vercel, cron requests send CRON_SECRET.
   return !process.env.VERCEL;
 }

@@ -7,61 +7,95 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { GenerateButton } from "@/components/GenerateButton";
 import { hasXaiKey } from "@/lib/env";
 import type { BriefSegment } from "@/lib/brief";
+import { estimateSpokenMinutesAt1x, formatBriefLengthShort, parseBriefLength } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
     where: { id },
-    include: { show: true, brief: true, recapAudio: true },
+    include: { show: true, brief: true, recapAudio: true, sttJob: true },
   });
   if (!episode) notFound();
-  if (!user && !episode.seeded) redirect("/login");
 
-  const segments = episode.brief
+  const follow = await prisma.follow.findUnique({
+    where: { userId_showId: { userId: user.id, showId: episode.showId } },
+  });
+  const followLength = follow ? parseBriefLength(follow.briefLength) : null;
+  const published = isPublishedTranscriptBrief(episode.brief);
+  const storedBriefLength = published && episode.brief ? parseBriefLength(episode.brief.briefLength) : null;
+  const nextLength = followLength ?? storedBriefLength;
+  const lengthChanged = Boolean(followLength && storedBriefLength && followLength !== storedBriefLength);
+
+  const segments = published && episode.brief
     ? (JSON.parse(episode.brief.segmentsJson) as BriefSegment[])
     : [];
-  const takeaways = episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
+  const takeaways = published && episode.brief ? (JSON.parse(episode.brief.takeawaysJson) as string[]) : [];
+
+  const durationHint =
+    published && episode.recapAudio
+      ? episode.recapAudio.durationSeconds && episode.recapAudio.durationSeconds > 0
+        ? episode.recapAudio.durationSeconds
+        : episode.brief?.spokenRecap
+          ? Math.max(1, Math.round(estimateSpokenMinutesAt1x(episode.brief.spokenRecap) * 60))
+          : undefined
+      : undefined;
+
+  const player =
+    published && episode.recapAudio ? (
+      <AudioPlayer src={`/api/audio/${episode.id}`} durationHint={durationHint} />
+    ) : null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
-      <Link href={`/shows/${episode.show.id}`} className="text-sm text-muted hover:text-ink">
+    <div className="mx-auto max-w-2xl space-y-6">
+      <Link
+        href={`/shows/${episode.show.id}`}
+        className="tap pressable inline-flex items-center rounded-md px-1 text-sm text-ink/80"
+      >
         ← {episode.show.title}
       </Link>
 
-      {episode.brief ? (
+      {lengthChanged && followLength ? (
+        <p className="text-sm text-muted">
+          Length is now {formatBriefLengthShort(followLength)}. Generate to rewrite.
+        </p>
+      ) : null}
+
+      {published && episode.brief ? (
         <BriefView
-          showTitle={episode.show.title}
           episodeTitle={episode.title}
           guest={episode.brief.guest}
           publishedAt={episode.publishedAt}
+          durationSeconds={episode.durationSeconds}
           link={episode.link}
           overview={episode.brief.overview}
           segments={segments}
           takeaways={takeaways}
-          sourceType={episode.brief.sourceType}
-          confidenceNote={episode.brief.confidenceNote}
+          briefLength={episode.brief.briefLength}
+          sourceLimited={episode.brief.sourceLimited}
+          player={player}
         />
       ) : (
         <div className="space-y-3">
-          <h1 className="font-display text-4xl">{episode.title}</h1>
-          <p className="text-muted">No brief yet. Generate one from the transcript or official show notes.</p>
+          <h1 className="font-display text-3xl leading-tight sm:text-4xl">{episode.title}</h1>
+          <p className="text-muted">
+            {episode.sttJob && episode.sttJob.status !== "failed" && episode.sttJob.status !== "complete"
+              ? "Transcribing…"
+              : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
+          </p>
         </div>
       )}
 
-      {episode.recapAudio ? (
-        <AudioPlayer
-          src={`/api/audio/${episode.id}`}
-          title={`${episode.show.title} · ${episode.title}`}
-        />
-      ) : (
-        <div className="rounded-2xl border border-dashed border-line p-4 text-sm text-muted">
-          No spoken recap stored yet. Generation uses Grok Voice (xAI TTS) only.
-        </div>
-      )}
-
-      <GenerateButton episodeId={episode.id} hasXaiKey={hasXaiKey()} />
+      <GenerateButton
+        episodeId={episode.id}
+        hasXaiKey={hasXaiKey()}
+        briefLength={nextLength ?? undefined}
+        retryUnavailable={!published}
+      />
     </div>
   );
 }

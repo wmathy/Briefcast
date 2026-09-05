@@ -88,7 +88,7 @@ export const SEED_EPISODES = [
         "Up First from NPR. A visit to the remote Pacific island ecosystem losing protections. Guest: Lauren Sommer. NPR’s Lauren Sommer reports from Palmyra Atoll, a remote Pacific conservation area about a thousand miles south of Hawaii, and talks with host Ayesha Rascoe about what she saw there. Official show notes say the Trump administration is trying to roll back longstanding protections by opening nearby waters to commercial fishing. Palmyra is part of four protected U.S. marine monuments, with birds, marine life, and one of the most pristine coral reefs in the world. No one lives there full time, and journalist access is rare. Sommer and Rascoe discuss the wildlife, reefs, and what the islands and offshore waters mean to Native Hawaiians, conservationists, and commercial fishers.",
       sourceType: "shownotes" as const,
       confidenceNote:
-        "This brief is based on official show notes, not a full transcript. Quotes and topics not present in the notes were not added.",
+        "Notes-only source: a full episode transcript was not available, so this brief covers the official show notes — not the entire episode. Quotes and topics not present in the notes were not added.",
       guest: "Lauren Sommer",
     } satisfies SeedBrief,
   },
@@ -143,7 +143,7 @@ export const SEED_EPISODES = [
         "Planet Money. Who decides what big box sells? Our GAME got us answers. Planet Money goes into the room where retailers decide which products reach big-box shelves. The hosts pitch their own board game, Sell Me a Sasquatch, to learn how those decisions are made and what happens to their game. Official notes say outsiders usually cannot get inside that room. The episode follows the pitch, the buyers’ thinking, and the game’s fate. The written show notes do not name the final decision.",
       sourceType: "shownotes" as const,
       confidenceNote:
-        "This brief is based on official show notes, not a full transcript. Quotes and topics not present in the notes were not added.",
+        "Notes-only source: a full episode transcript was not available, so this brief covers the official show notes — not the entire episode. Quotes and topics not present in the notes were not added.",
       guest: null,
     } satisfies SeedBrief,
   },

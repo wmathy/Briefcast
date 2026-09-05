@@ -2,8 +2,16 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBriefDate } from "@/lib/brief";
-import { countUnbriefedFollowedEpisodes, getFollowedBriefQueue, getFollowedShows } from "@/lib/queue";
+import {
+  countLatestFollowedNeedingBrief,
+  countUnbriefedFollowedEpisodes,
+  getFollowedBriefQueue,
+  getFollowedShows,
+} from "@/lib/queue";
+import { formatBriefLengthShort } from "@/lib/brief-length";
+import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT } from "@/lib/transcript-complete";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
+import { AutoGenerateLatest } from "@/components/AutoGenerateLatest";
 
 export const dynamic = "force-dynamic";
 
@@ -11,24 +19,22 @@ export default async function LibraryPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [follows, queue, unbriefed] = await Promise.all([
+  const [follows, queue, unbriefed, latestNeeding] = await Promise.all([
     getFollowedShows(user.id),
     getFollowedBriefQueue(user.id),
     countUnbriefedFollowedEpisodes(user.id),
+    countLatestFollowedNeedingBrief(user.id),
   ]);
 
   return (
-    <div className="space-y-10">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="font-display text-4xl">Library</h1>
-          <p className="mt-2 text-muted">Shows you chose. Briefs appear here when those shows publish.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="font-display text-3xl sm:text-4xl">Library</h1>
+        <div className="flex flex-wrap items-center gap-2">
           {follows.length > 0 ? <RefreshLibraryButton /> : null}
           <Link
             href="/discover"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep"
+            className="tap pressable inline-flex items-center rounded-full bg-accent px-4 text-sm font-medium text-bg"
           >
             Find a podcast
           </Link>
@@ -36,64 +42,67 @@ export default async function LibraryPage() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
-        <p className="text-sm text-muted">Briefs for podcasts you follow, newest episode first.</p>
-        {unbriefed > 0 ? (
-          <p className="text-sm text-muted">
-            {unbriefed} followed episode{unbriefed === 1 ? "" : "s"} {unbriefed === 1 ? "has" : "have"} no
-            brief yet. New ones are written automatically.
-          </p>
-        ) : null}
+        <div className="flex items-baseline justify-between gap-3">
+          <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Queue</h2>
+          {unbriefed > 0 ? (
+            <p className="text-xs text-muted">
+              {unbriefed} waiting
+            </p>
+          ) : null}
+        </div>
+        <AutoGenerateLatest needed={latestNeeding > 0} />
         {queue.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
-            {follows.length === 0
-              ? "Follow a podcast to start a queue. Briefcast does not pre-load sample briefs."
-              : "No briefs yet. New episodes from shows you follow are written automatically."}
+          <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-sm text-muted">
+            {follows.length === 0 ? "Follow a show" : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
           </div>
         ) : (
+          <>
+          <p className="text-xs text-muted">Ready to play</p>
           <ul className="space-y-3">
             {queue.map((episode) => (
               <li key={episode.id}>
                 <Link
                   href={`/episodes/${episode.id}`}
-                  className="block rounded-2xl border border-line bg-bg-raised p-4 hover:border-accent"
+                  className="card-link block min-h-11 rounded-2xl border border-line bg-bg-raised p-4"
                 >
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
-                  <p className="font-medium">{episode.title}</p>
-                  <p className="text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
+                  <p className="font-medium leading-snug">{episode.title}</p>
+                  <p className="mt-1 text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
                 </Link>
               </li>
             ))}
           </ul>
+          </>
         )}
       </section>
 
       <section className="space-y-3">
         <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Following</h2>
         {follows.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-line p-6 text-muted">
-            You are not following any shows yet. Search iTunes and follow the ones you already listen to.
+          <div className="rounded-2xl border border-dashed border-line px-4 py-5 text-sm text-muted">
+            Nothing here
           </div>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2">
-            {follows.map(({ show }) => (
+          <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+            {follows.map(({ show, briefLength }) => (
               <li key={show.id}>
                 <Link
                   href={`/shows/${show.id}`}
-                  className="flex gap-3 rounded-2xl border border-line bg-bg-card p-3 hover:border-accent"
+                  className="card-link flex min-h-11 gap-3 rounded-2xl border border-line bg-bg-card p-3 sm:p-4"
                 >
                   {show.artworkUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={show.artworkUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                    <img src={show.artworkUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover sm:h-16 sm:w-16" />
                   ) : (
-                    <div className="h-16 w-16 rounded-xl bg-bg" />
+                    <div className="h-20 w-20 shrink-0 rounded-xl bg-bg sm:h-16 sm:w-16" />
                   )}
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{show.title}</p>
-                    <p className="truncate text-sm text-muted">{show.artist}</p>
-                    {show.episodes[0] ? (
-                      <p className="mt-1 truncate text-xs text-muted">Latest: {show.episodes[0].title}</p>
-                    ) : null}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium leading-snug">{show.title}</p>
+                    <p className="mt-0.5 text-sm text-muted">{show.artist}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted">
+                      {formatBriefLengthShort(briefLength)}
+                      {show.episodes[0] ? ` · ${show.episodes[0].title}` : ""}
+                    </p>
                   </div>
                 </Link>
               </li>

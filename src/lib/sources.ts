@@ -1,6 +1,7 @@
+import { hasXaiKey } from "@/lib/env";
 import { looksLikeTranscriptUrl } from "@/lib/html";
+import { isCompleteEpisodeTranscript } from "@/lib/transcript-complete";
 import {
-  SHOWNOTES_CONFIDENCE_NOTE,
   collectYoutubeSearchVideos,
   extractPageDiscoveries,
   extractTranscriptUrlsFromText,
@@ -12,15 +13,18 @@ import {
   youtubeCaptionUrls,
   youtubeTitlesMatch,
 } from "@/lib/transcripts";
+import { xaiSttFromAudioUrl } from "@/lib/xai";
+import { transcribeEpisodeDurable, TranscriptInProgressError } from "@/lib/stt-job";
 
 export type EpisodeSource = {
   text: string;
-  sourceType: "transcript" | "shownotes";
+  sourceType: "transcript";
   confidenceNote: string | null;
 };
 
-const MAX_SOURCE_CHARS = 80_000;
-const MAX_FETCH_ATTEMPTS = 10;
+/** Long enough for a 3-hour episode at conversational pace. */
+export const MAX_SOURCE_CHARS = 400_000;
+const MAX_FETCH_ATTEMPTS = 12;
 const FETCH_TIMEOUT_MS = 12_000;
 
 const BRIEFCAST_UA = "Briefcast/0.1 (+https://github.com/wmathy/Briefcast)";
@@ -32,13 +36,20 @@ function trimSource(text: string): string {
   return `${text.slice(0, MAX_SOURCE_CHARS)}\n\n[Source truncated for length.]`;
 }
 
-function shownotesSource(description: string): EpisodeSource {
-  const notes = description.trim();
-  return {
-    text: trimSource(notes || "No official show notes were available."),
-    sourceType: "shownotes",
-    confidenceNote: SHOWNOTES_CONFIDENCE_NOTE,
-  };
+/** Keep start, middle, and end so the model can cover a 3-hour episode inside one request. */
+export function briefPromptSource(text: string, max = 90_000): string {
+  if (text.length <= max) return text;
+  const head = Math.floor(max * 0.4);
+  const mid = Math.floor(max * 0.3);
+  const tail = max - head - mid;
+  const midStart = Math.max(head, Math.floor((text.length - mid) / 2));
+  return [
+    text.slice(0, head),
+    "\n\n[... middle of episode ...]\n\n",
+    text.slice(midStart, midStart + mid),
+    "\n\n[... later in episode ...]\n\n",
+    text.slice(Math.max(midStart + mid, text.length - tail)),
+  ].join("");
 }
 
 function transcriptSource(text: string): EpisodeSource {
@@ -103,22 +114,33 @@ export async function loadEpisodeSource(input: {
   description: string;
   transcriptUrl?: string | null;
   episodeLink?: string | null;
+  audioUrl?: string | null;
+  durationSeconds?: number | null;
   showTitle?: string | null;
   episodeTitle?: string | null;
-}): Promise<EpisodeSource> {
+  episodeId?: string | null;
+}): Promise<EpisodeSource | null> {
   const notes = input.description.trim();
   const tried = new Set<string>();
   let attempts = 0;
+
+  const accept = (text: string, coveredAudioSeconds?: number | null): EpisodeSource | null => {
+    const complete = isCompleteEpisodeTranscript({
+      text,
+      notes,
+      durationSeconds: input.durationSeconds,
+      coveredAudioSeconds,
+    });
+    return complete.ok ? transcriptSource(text) : null;
+  };
 
   const tryUrl = async (url: string, trust: "official" | "discovered"): Promise<EpisodeSource | null> => {
     if (!url || tried.has(url) || attempts >= MAX_FETCH_ATTEMPTS) return null;
     tried.add(url);
     attempts += 1;
     const transcript = await fetchTranscript(url);
-    if (isUsableTranscript(transcript, notes, trust)) {
-      return transcriptSource(transcript!);
-    }
-    return null;
+    if (!isUsableTranscript(transcript, notes, trust) || !transcript) return null;
+    return accept(transcript);
   };
 
   const tryCandidates = async (candidates: Candidate[]): Promise<EpisodeSource | null> => {
@@ -142,6 +164,15 @@ export async function loadEpisodeSource(input: {
   ]);
   if (firstPass) return firstPass;
 
+  // Long (or unknown-length) files with audio go straight to chunked STT.
+  // YouTube / page / directory discovery can burn the 300s budget first.
+  const skipSlowDiscovery = Boolean(
+    input.audioUrl && ((input.durationSeconds ?? 0) >= 15 * 60 || input.durationSeconds == null),
+  );
+  if (skipSlowDiscovery) {
+    return transcribeEpisodeAudio(input, accept);
+  }
+
   for (const videoId of extractYoutubeVideoIds(input.description)) {
     const hit = await tryYoutubeCaptions(videoId, tryUrl);
     if (hit) return hit;
@@ -162,7 +193,13 @@ export async function loadEpisodeSource(input: {
     }
   }
 
-  if (input.showTitle && input.episodeTitle && attempts < MAX_FETCH_ATTEMPTS) {
+  const alreadyTriedOfficialNpr = fromNpr.length > 0;
+  if (
+    !alreadyTriedOfficialNpr &&
+    input.showTitle &&
+    input.episodeTitle &&
+    attempts < MAX_FETCH_ATTEMPTS
+  ) {
     const videoId = await searchYoutubeVideoId(input.showTitle, input.episodeTitle);
     if (videoId) {
       const hit = await tryYoutubeCaptions(videoId, tryUrl);
@@ -178,7 +215,38 @@ export async function loadEpisodeSource(input: {
     if (directories) return directories;
   }
 
-  return shownotesSource(notes);
+  return transcribeEpisodeAudio(input, accept);
+}
+
+async function transcribeEpisodeAudio(
+  input: {
+    audioUrl?: string | null;
+    showTitle?: string | null;
+    episodeTitle?: string | null;
+    durationSeconds?: number | null;
+    episodeId?: string | null;
+  },
+  accept: (text: string, coveredAudioSeconds?: number | null) => EpisodeSource | null,
+): Promise<EpisodeSource | null> {
+  if (!input.audioUrl || !hasXaiKey()) return null;
+  const keyterms = [input.showTitle, input.episodeTitle].filter((value): value is string => Boolean(value));
+  try {
+    const result = input.episodeId
+      ? await transcribeEpisodeDurable({
+          episodeId: input.episodeId,
+          audioUrl: input.audioUrl,
+          keyterms,
+          durationSeconds: input.durationSeconds,
+        })
+      : await xaiSttFromAudioUrl(input.audioUrl, keyterms, { durationSeconds: input.durationSeconds });
+    if (!result) return null;
+    const covered = result.duration > 0 ? result.duration : null;
+    return accept(result.text, covered);
+  } catch (error) {
+    if (error instanceof TranscriptInProgressError) throw error;
+    console.error("[stt] transcribe failed:", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 async function tryYoutubeCaptions(

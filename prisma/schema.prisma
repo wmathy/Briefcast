@@ -30,11 +30,15 @@ model Show {
 }
 
 model Follow {
-  userId    String
-  showId    String
-  createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  show      Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  userId      String
+  showId      String
+  briefLength          String    @default("medium")
+  ttsVoice             String    @default("eve")
+  lastBriefedEpisodeId String?
+  lastBriefedAt        DateTime?
+  createdAt            DateTime  @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  show        Show     @relation(fields: [showId], references: [id], onDelete: Cascade)
 
   @@id([userId, showId])
 }
@@ -45,15 +49,18 @@ model Episode {
   guid        String
   title       String
   publishedAt DateTime
-  link        String?
-  audioUrl    String?
-  description String      @default("")
-  guest       String?
+  link          String?
+  audioUrl         String?
+  transcriptUrl    String?
+  durationSeconds  Int?
+  description   String      @default("")
+  guest         String?
   seeded      Boolean     @default(false)
   createdAt   DateTime    @default(now())
   show        Show        @relation(fields: [showId], references: [id], onDelete: Cascade)
   brief       Brief?
   recapAudio  RecapAudio?
+  sttJob      SttJob?
 
   @@unique([showId, guid])
 }
@@ -68,15 +75,37 @@ model Brief {
   sourceType     String
   confidenceNote String?
   guest          String?
+  briefLength    String   @default("medium")
+  sourceLimited  Boolean  @default(false)
   createdAt      DateTime @default(now())
   episode        Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 }
 
 model RecapAudio {
-  id        String   @id @default(cuid())
-  episodeId String   @unique
-  mimeType  String   @default("audio/mpeg")
-  data      Bytes
-  createdAt DateTime @default(now())
-  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  episodeId        String   @unique
+  mimeType         String   @default("audio/mpeg")
+  data             Bytes
+  durationSeconds  Int?
+  voiceId          String   @default("eve")
+  createdAt        DateTime @default(now())
+  episode          Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+}
+
+/** Durable Grok STT progress so a 3-hour episode can finish across many function turns. */
+model SttJob {
+  id              String    @id @default(cuid())
+  episodeId       String    @unique
+  audioUrl        String
+  nextByte        Int       @default(0)
+  totalBytes      Int?
+  chunkCount      Int       @default(0)
+  coveredSeconds  Int       @default(0)
+  text            String    @default("")
+  status          String    @default("pending")
+  error           String?
+  lockedAt        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 }
