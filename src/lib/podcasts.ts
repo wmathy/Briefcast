@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/db";
-import type { ItunesPodcast } from "@/lib/itunes";
+import { canonicalItunesFeedUrl, lookupPodcast, resolveItunesPodcast, type ItunesPodcast } from "@/lib/itunes";
 import { fetchRssEpisodes } from "@/lib/rss";
 
 export type SyncedEpisode = {
@@ -8,30 +8,56 @@ export type SyncedEpisode = {
 };
 
 export async function upsertShowFromItunes(podcast: ItunesPodcast) {
+  const resolved = await resolveItunesPodcast(podcast);
   const prisma = getPrisma();
   return prisma.show.upsert({
-    where: { itunesId: podcast.itunesId },
+    where: { itunesId: resolved.itunesId },
     update: {
-      title: podcast.title,
-      artist: podcast.artist,
-      feedUrl: podcast.feedUrl,
-      artworkUrl: podcast.artworkUrl,
-      description: podcast.description,
+      title: resolved.title,
+      artist: resolved.artist,
+      feedUrl: resolved.feedUrl,
+      artworkUrl: resolved.artworkUrl,
+      description: resolved.description,
     },
     create: {
-      itunesId: podcast.itunesId,
-      title: podcast.title,
-      artist: podcast.artist,
-      feedUrl: podcast.feedUrl,
-      artworkUrl: podcast.artworkUrl,
-      description: podcast.description,
+      itunesId: resolved.itunesId,
+      title: resolved.title,
+      artist: resolved.artist,
+      feedUrl: resolved.feedUrl,
+      artworkUrl: resolved.artworkUrl,
+      description: resolved.description,
     },
   });
 }
 
+async function resolvedShowFeedUrl(showId: string, feedUrl: string): Promise<string> {
+  const prisma = getPrisma();
+  const show = await prisma.show.findUnique({
+    where: { id: showId },
+    select: { itunesId: true, feedUrl: true },
+  });
+  const candidate = feedUrl || show?.feedUrl || "";
+  const known = show ? canonicalItunesFeedUrl(show.itunesId, candidate) : candidate || null;
+  if (known) {
+    if (show && known !== show.feedUrl) {
+      await prisma.show.update({ where: { id: showId }, data: { feedUrl: known } });
+    }
+    return known;
+  }
+  if (show) {
+    const lookedUp = await lookupPodcast(show.itunesId);
+    if (lookedUp?.feedUrl) {
+      await prisma.show.update({ where: { id: showId }, data: { feedUrl: lookedUp.feedUrl } });
+      return lookedUp.feedUrl;
+    }
+  }
+  return candidate;
+}
+
 export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: number | null) {
   const prisma = getPrisma();
-  const episodes = await fetchRssEpisodes(feedUrl, limit);
+  const resolvedFeedUrl = await resolvedShowFeedUrl(showId, feedUrl);
+  const episodes = await fetchRssEpisodes(resolvedFeedUrl, limit);
   const existing = await prisma.episode.findMany({
     where: { showId },
     select: { id: true, guid: true, transcriptUrl: true, link: true, audioUrl: true, durationSeconds: true },
@@ -51,6 +77,7 @@ export async function syncShowEpisodes(showId: string, feedUrl: string, limit?: 
 
   if (toCreate.length > 0) {
     await prisma.episode.createMany({
+      skipDuplicates: true,
       data: toCreate.map((episode) => ({
         showId,
         guid: episode.guid,
