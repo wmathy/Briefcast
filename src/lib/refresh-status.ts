@@ -57,15 +57,22 @@ export function refreshStatusLabel(data: RefreshResult): string {
 }
 
 export function refreshHasMore(data: RefreshResult): boolean {
-  if (data.error || data.reason === "missing-xai-key") return false;
+  if (data.error === "Sign in required.") return false;
+  if (data.reason === "missing-xai-key") return false;
+  if (data.reason === "no-full-transcript" && !data.progressed && !data.generated) return false;
   if (data.reason === "transcript-in-progress" || data.reason === "audio-pending") return true;
   return Boolean(data.remaining && data.remaining > 0);
+}
+
+export function refreshIsTransientStatus(status: number): boolean {
+  return status === 0 || status === 408 || status === 429 || status >= 500;
 }
 
 export function refreshShouldContinue(status: number, data: RefreshResult): boolean {
   // Do not stop just because a hop was scheduled — Preview hops can 401 or die
   // after() leftover time. Library keeps a backup loop.
-  if (status === 504 || status === 502) return true;
+  if (status === 401) return false;
+  if (refreshIsTransientStatus(status)) return true;
   if (data.reason === "transcript-in-progress") return true;
   return refreshHasMore(data);
 }

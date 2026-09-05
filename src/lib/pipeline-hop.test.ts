@@ -36,6 +36,17 @@ describe("pipelineShouldHop", () => {
     expect(pipelineShouldHop({ remaining: 2, progressed: true, reason: "missing-xai-key" })).toBe(false);
     expect(pipelineShouldHop({ remaining: 0, progressed: true, generated: 1 })).toBe(false);
   });
+
+  it("does not hop-spin when the newest episode has no full transcript", () => {
+    expect(
+      pipelineShouldHop({
+        remaining: 1,
+        progressed: false,
+        errors: ["The Tucker Carlson Show: Full transcript not available yet — no brief"],
+        reason: "no-full-transcript",
+      }),
+    ).toBe(false);
+  });
 });
 
 describe("pipelineHopUrl", () => {

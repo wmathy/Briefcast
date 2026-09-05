@@ -1,5 +1,5 @@
-/** Newest episodes that are always eligible, even if they predate the follow. */
-export const AUTO_BRIEF_BACKFILL = 5;
+/** Auto-brief considers only the newest episode per followed show, then one global target. */
+export const AUTO_BRIEF_BACKFILL = 1;
 
 export function followWindowStart(followedAt: Date): Date {
   return new Date(
@@ -13,7 +13,13 @@ export function episodeIsInBriefWindow(input: {
   followedAt: Date;
   newestIds: readonly string[];
 }): boolean {
-  if (input.newestIds.includes(input.episodeId)) return true;
-  return input.publishedAt.getTime() >= followWindowStart(input.followedAt).getTime();
+  return input.newestIds.slice(0, AUTO_BRIEF_BACKFILL).includes(input.episodeId);
 }
 
+/** Auto Check/cron/hops keep one target: the newest episode that still needs a spoken brief. */
+export function takeSingleNewestWork<T extends { id: string }>(ids: readonly T[] | readonly string[]): string[] {
+  const first = ids[0];
+  if (!first) return [];
+  const id = typeof first === "string" ? first : first.id;
+  return id ? [id] : [];
+}

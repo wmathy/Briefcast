@@ -9,7 +9,7 @@ import {
   type RefreshResult,
 } from "@/lib/refresh-status";
 
-/** Keeps writing the latest unbriefed followed episode until none remain or a write fails. */
+/** Keeps writing the single newest unbriefed followed episode until it finishes or auth fails. */
 export function AutoGenerateLatest({ needed }: { needed: boolean }) {
   const router = useRouter();
   const started = useRef(false);
@@ -21,40 +21,44 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
     let cancelled = false;
 
     (async () => {
-    let more = true;
-    let turns = 0;
-    while (more && !cancelled && turns < 200) {
-      turns += 1;
-        const response = await fetch("/api/queue/refresh?continue=1", { method: "POST" });
-        const data = (await response.json().catch(() => ({}))) as RefreshResult;
-        if (cancelled) return;
-        if (!response.ok) {
-          if (refreshShouldContinue(response.status, data) && turns < 200) {
-            setStatus(response.status === 504 || response.status === 502 ? "Continuing…" : refreshStatusLabel(data));
-            more = true;
+      let more = true;
+      let turns = 0;
+      while (more && !cancelled && turns < 200) {
+        turns += 1;
+        try {
+          const response = await fetch("/api/queue/refresh?continue=1", { method: "POST" });
+          const data = (await response.json().catch(() => ({}))) as RefreshResult;
+          if (cancelled) return;
+          if (response.status === 401) {
+            setStatus(data.error ?? "Sign in required.");
+            return;
+          }
+          if (!response.ok) {
+            setStatus(
+              response.status === 504 || response.status === 502 ? "Continuing…" : refreshStatusLabel(data),
+            );
+            more = refreshShouldContinue(response.status, data);
+            if (more) {
+              await new Promise((resolve) => setTimeout(resolve, refreshContinueDelayMs(data) || 20_000));
+            }
             continue;
           }
-          setStatus(data.error ?? "Could not write.");
-          return;
-        }
-        setStatus(refreshStatusLabel(data));
-        more = refreshShouldContinue(response.status, data);
-        const delayMs = refreshContinueDelayMs(data);
-        if (more && delayMs > 0 && !cancelled) {
-          await new Promise((resolve) => setTimeout(resolve, delayMs));
-        }
-        if (
-          data.errors &&
-          data.errors.length > 0 &&
-          !data.generated &&
-          !more
-        ) {
-          return;
+          setStatus(refreshStatusLabel(data));
+          more = refreshShouldContinue(response.status, data);
+          const delayMs = refreshContinueDelayMs(data);
+          if (more && delayMs > 0 && !cancelled) {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          }
+        } catch {
+          if (cancelled) return;
+          setStatus("Continuing…");
+          more = true;
+          await new Promise((resolve) => setTimeout(resolve, 20_000));
         }
       }
       if (!cancelled) router.refresh();
     })().catch(() => {
-      if (!cancelled) setStatus("Could not write.");
+      if (!cancelled) setStatus("Continuing…");
     });
 
     return () => {

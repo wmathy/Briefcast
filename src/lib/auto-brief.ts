@@ -16,7 +16,6 @@ import {
 } from "@/lib/auto-brief-policy";
 import {
   collectWindowedAutoBriefIds,
-  collectWindowedFollowedWork,
   recapNeedsRewrite,
 } from "@/lib/queue";
 import { syncShowEpisodes } from "@/lib/podcasts";
@@ -215,7 +214,7 @@ export async function refreshFollowedBriefs(options?: {
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
   // Recount after this turn so a persisted draft whose TTS timed out stays queued.
   // Waiting / hop remaining is unbriefed-only — Ready rewrites do not keep hops on #185.
-  const stillNeeded = await collectWindowedFollowedWork({
+  const stillNeeded = await collectWindowedAutoBriefIds({
     userId: options?.userId,
     showId: options?.showId,
   });
@@ -223,7 +222,7 @@ export async function refreshFollowedBriefs(options?: {
     ...poll,
     ...generation,
     generating: batch.toGenerate.length,
-    remaining: stillNeeded.filter((item) => item.kind === "unbriefed").length,
+    remaining: stillNeeded.length,
     errors: [...poll.syncErrors, ...generation.errors],
   };
 }

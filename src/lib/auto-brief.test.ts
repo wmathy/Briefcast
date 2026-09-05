@@ -30,7 +30,7 @@ describe("takeAutoBriefBatch", () => {
     expect(batch.toGenerate).toEqual(["a", "b", "c"]);
     expect(batch.remaining).toBe(2);
     expect(AUTO_BRIEF_LIMIT).toBe(1);
-    expect(AUTO_BRIEF_LOOKAHEAD).toBe(8);
+    expect(AUTO_BRIEF_LOOKAHEAD).toBe(1);
   });
 
   it("dedupes and ignores empty ids", () => {

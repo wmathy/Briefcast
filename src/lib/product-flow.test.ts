@@ -33,7 +33,9 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./stt-job.ts")).toContain("Even the last chunk returns in-progress");
     expect(read("./queue.ts")).toContain("orderIdsByPublishedAt");
     expect(read("./queue.ts")).toContain("orderAutoBriefQueue");
-    expect(read("./queue.ts")).toContain('kind === "unbriefed"');
+    expect(read("./queue.ts")).toContain("takeSingleNewestWork");
+    expect(read("./queue.ts")).toContain('kind: "unbriefed"');
+    expect(read("./queue-window.ts")).toContain("AUTO_BRIEF_BACKFILL = 1");
     expect(read("./auto-brief.ts")).toContain("shouldAdvanceOlderEpisode");
     expect(read("./auto-brief.ts")).toContain("force: false");
     expect(read("./auto-brief.ts")).toContain("Keep collectWindowed order");
@@ -98,6 +100,8 @@ describe("briefs come from the full episode transcript", () => {
     expect(read("./brief.ts")).toContain("briefPromptSource(input.source.text)");
     expect(read("./auto-brief.ts")).toContain("stillNeeded");
     expect(read("../components/AutoGenerateLatest.tsx")).toContain("refreshShouldContinue");
+    expect(read("../components/AutoGenerateLatest.tsx")).toContain("Continuing…");
+    expect(read("../components/AutoGenerateLatest.tsx")).not.toContain("Could not write.");
     expect(read("./xai.ts")).toContain("voice_id: voiceId");
     expect(read("./xai.ts")).not.toContain('voice_id: "eve"');
   });

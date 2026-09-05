@@ -30,6 +30,15 @@ describe("refreshStatusLabel", () => {
       }),
     ).toBe("Transcribing #2549 - Jared Diamond…");
     expect(refreshShouldContinue(504, { generated: 0 })).toBe(true);
+    expect(refreshShouldContinue(500, { generated: 0 })).toBe(true);
+    expect(refreshShouldContinue(401, { error: "Sign in required." })).toBe(false);
+    expect(
+      refreshShouldContinue(200, {
+        remaining: 1,
+        generated: 0,
+        reason: "no-full-transcript",
+      }),
+    ).toBe(false);
     expect(refreshShouldContinue(200, { remaining: 1, generated: 0, errors: ["xAI TTS timed out"] })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, reason: "transcript-in-progress", continuing: true })).toBe(
       true,

@@ -1,6 +1,6 @@
 /** Max heavy STT/TTS jobs one request runs. Locked episodes are skipped first. */
 export const AUTO_BRIEF_LIMIT = 1;
-export const AUTO_BRIEF_LOOKAHEAD = 8;
+export const AUTO_BRIEF_LOOKAHEAD = 1;
 
 export type AutoBriefKind = "unbriefed" | "rewrite";
 

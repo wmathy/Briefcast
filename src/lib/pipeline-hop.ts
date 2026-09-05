@@ -17,6 +17,7 @@ export type PipelineHopResult = {
 
 export function pipelineShouldHop(result: PipelineHopResult): boolean {
   if (result.reason === "missing-xai-key") return false;
+  if (result.reason === "no-full-transcript" && !result.progressed) return false;
   const remaining = result.remaining ?? 0;
   if (remaining <= 0) return false;
   if (result.progressed) return true;

@@ -1,9 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { orderAutoBriefQueue, type AutoBriefKind } from "@/lib/auto-brief-policy";
-import {
-  AUTO_BRIEF_BACKFILL,
-  followWindowStart,
-} from "@/lib/queue-window";
+import { takeSingleNewestWork } from "@/lib/queue-window";
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
@@ -36,58 +33,29 @@ export async function getFollowedBriefQueue(userId: string) {
   });
 }
 
-async function windowedFollowedWork(input: {
+async function latestFollowedWork(input: {
   showId: string;
-  followedAt: Date;
   ttsVoice?: string | null;
   briefLength?: string | null;
-}): Promise<WindowedBriefWork[]> {
+}): Promise<WindowedBriefWork | null> {
   const prisma = getPrisma();
-  const newest = await prisma.episode.findMany({
+  const row = await prisma.episode.findFirst({
     where: { showId: input.showId },
-    orderBy: { publishedAt: "desc" },
-    take: AUTO_BRIEF_BACKFILL,
-    select: { id: true },
-  });
-  const newestIds = newest.map((row) => row.id);
-  const rows = await prisma.episode.findMany({
-    where: {
-      showId: input.showId,
-      OR: [{ publishedAt: { gte: followWindowStart(input.followedAt) } }, { id: { in: newestIds } }],
-    },
     orderBy: { publishedAt: "desc" },
     include: { brief: true, recapAudio: true },
   });
-  const items: WindowedBriefWork[] = [];
-  for (const row of rows) {
-    if (!isPublishedReadyBrief(row)) {
-      items.push({ id: row.id, publishedAt: row.publishedAt, kind: "unbriefed" });
-      continue;
-    }
-    if (recapNeedsRewrite(row, input.ttsVoice, input.briefLength)) {
-      items.push({ id: row.id, publishedAt: row.publishedAt, kind: "rewrite" });
-    }
+  if (!row) return null;
+  if (!isPublishedReadyBrief(row)) {
+    return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed" };
   }
-  return items;
+  if (recapNeedsRewrite(row, input.ttsVoice, input.briefLength)) {
+    return { id: row.id, publishedAt: row.publishedAt, kind: "rewrite" };
+  }
+  return null;
 }
 
 export async function countUnbriefedFollowedEpisodes(userId: string) {
-  const prisma = getPrisma();
-  const follows = await prisma.follow.findMany({
-    where: { userId },
-    select: { showId: true, createdAt: true, ttsVoice: true, briefLength: true },
-  });
-  let count = 0;
-  for (const follow of follows) {
-    const items = await windowedFollowedWork({
-      showId: follow.showId,
-      followedAt: follow.createdAt,
-      ttsVoice: follow.ttsVoice,
-      briefLength: follow.briefLength,
-    });
-    count += items.filter((item) => item.kind === "unbriefed").length;
-  }
-  return count;
+  return (await collectWindowedAutoBriefIds({ userId })).length;
 }
 
 export async function collectWindowedFollowedWork(input: {
@@ -120,14 +88,12 @@ export async function collectWindowedFollowedWork(input: {
 
   const items: WindowedBriefWork[] = [];
   for (const [showId, meta] of earliest) {
-    items.push(
-      ...(await windowedFollowedWork({
-        showId,
-        followedAt: meta.followedAt,
-        ttsVoice: meta.ttsVoice,
-        briefLength: meta.briefLength,
-      })),
-    );
+    const item = await latestFollowedWork({
+      showId,
+      ttsVoice: meta.ttsVoice,
+      briefLength: meta.briefLength,
+    });
+    if (item) items.push(item);
   }
   return items;
 }
@@ -136,12 +102,11 @@ export async function collectWindowedAutoBriefIds(input: {
   userId?: string;
   showId?: string;
 }): Promise<string[]> {
-  return orderAutoBriefQueue(await collectWindowedFollowedWork(input));
+  return takeSingleNewestWork(orderAutoBriefQueue(await collectWindowedFollowedWork(input)));
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {
-  const items = await collectWindowedFollowedWork({ userId });
-  return items.filter((item) => item.kind === "unbriefed").length;
+  return (await collectWindowedAutoBriefIds({ userId })).length;
 }
 
 export type RecapRewriteReason = "missing" | "voice" | "length" | null;
