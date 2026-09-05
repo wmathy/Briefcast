@@ -32,7 +32,12 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./stt-job.ts")).toContain("STT_CHUNKS_PER_TURN = 2");
     expect(read("./stt-job.ts")).toContain("Even the last chunk returns in-progress");
     expect(read("./queue.ts")).toContain("orderIdsByPublishedAt");
+    expect(read("./queue.ts")).toContain("orderAutoBriefQueue");
+    expect(read("./queue.ts")).toContain('kind === "unbriefed"');
     expect(read("./auto-brief.ts")).toContain("shouldAdvanceOlderEpisode");
+    expect(read("./auto-brief.ts")).toContain("force: false");
+    expect(read("./auto-brief.ts")).toContain("Keep collectWindowed order");
+    expect(read("./generate.ts")).toContain("rewriteReason === \"voice\"");
     expect(read("./pipeline-hop.ts")).toContain("AUTH_SECRET");
     expect(read("./pipeline-hop.ts")).not.toContain("AbortSignal.timeout");
     expect(read("./refresh-status.ts")).toContain("Preview hops can 401");

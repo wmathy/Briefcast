@@ -46,11 +46,11 @@ export async function detectLatestUnbriefedEpisode(input: {
 
   const follow = await prisma.follow.findFirst({
     where: { showId: input.showId },
-    select: { lastBriefedEpisodeId: true, ttsVoice: true },
+    select: { lastBriefedEpisodeId: true, ttsVoice: true, briefLength: true },
     orderBy: { createdAt: "desc" },
   });
   const voice = parseTtsVoice(input.ttsVoice ?? follow?.ttsVoice);
-  const needsWork = recapNeedsRewrite(latest, voice);
+  const needsWork = recapNeedsRewrite(latest, voice, follow?.briefLength);
   const alreadyDone = latestIsAlreadyBriefed({
     latestId: latest.id,
     lastBriefedEpisodeId: follow?.lastBriefedEpisodeId ?? null,

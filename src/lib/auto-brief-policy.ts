@@ -2,6 +2,8 @@
 export const AUTO_BRIEF_LIMIT = 1;
 export const AUTO_BRIEF_LOOKAHEAD = 8;
 
+export type AutoBriefKind = "unbriefed" | "rewrite";
+
 export function orderIdsByPublishedAt(
   items: { id: string; publishedAt: Date | number }[],
 ): string[] {
@@ -14,6 +16,15 @@ export function orderIdsByPublishedAt(
     })
     .map((item) => item.id)
     .filter((id, index, all) => all.indexOf(id) === index);
+}
+
+/** Never-briefed newest first; Ready length/voice rewrites only after that backlog. */
+export function orderAutoBriefQueue(
+  items: { id: string; publishedAt: Date | number; kind: AutoBriefKind }[],
+): string[] {
+  const unbriefed = orderIdsByPublishedAt(items.filter((item) => item.kind === "unbriefed"));
+  const rewrite = orderIdsByPublishedAt(items.filter((item) => item.kind === "rewrite"));
+  return [...unbriefed, ...rewrite.filter((id) => !unbriefed.includes(id))];
 }
 
 export function isUnfinishedSttJob(job: { status: string; text?: string | null } | null | undefined): boolean {

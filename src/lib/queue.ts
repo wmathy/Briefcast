@@ -1,5 +1,5 @@
 import { getPrisma } from "@/lib/db";
-import { orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
+import { orderAutoBriefQueue, type AutoBriefKind } from "@/lib/auto-brief-policy";
 import {
   AUTO_BRIEF_BACKFILL,
   followWindowStart,
@@ -7,7 +7,20 @@ import {
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
-export { orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
+export { orderAutoBriefQueue, orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
+
+export type WindowedBriefWork = {
+  id: string;
+  publishedAt: Date;
+  kind: AutoBriefKind;
+};
+
+export function isPublishedReadyBrief(episode: {
+  brief?: { sourceType?: string | null } | null;
+  recapAudio?: unknown;
+}): boolean {
+  return Boolean(episode.brief && episode.brief.sourceType === "transcript" && episode.recapAudio);
+}
 
 /** Real generated briefs (written + spoken audio) for followed shows, newest episode first. */
 export async function getFollowedBriefQueue(userId: string) {
@@ -23,11 +36,12 @@ export async function getFollowedBriefQueue(userId: string) {
   });
 }
 
-async function windowedUnbriefedEpisodes(input: {
+async function windowedFollowedWork(input: {
   showId: string;
   followedAt: Date;
   ttsVoice?: string | null;
-}): Promise<{ id: string; publishedAt: Date }[]> {
+  briefLength?: string | null;
+}): Promise<WindowedBriefWork[]> {
   const prisma = getPrisma();
   const newest = await prisma.episode.findMany({
     where: { showId: input.showId },
@@ -44,69 +58,123 @@ async function windowedUnbriefedEpisodes(input: {
     orderBy: { publishedAt: "desc" },
     include: { brief: true, recapAudio: true },
   });
-  return rows
-    .filter((row) => recapNeedsRewrite(row, input.ttsVoice))
-    .map((row) => ({ id: row.id, publishedAt: row.publishedAt }));
+  const items: WindowedBriefWork[] = [];
+  for (const row of rows) {
+    if (!isPublishedReadyBrief(row)) {
+      items.push({ id: row.id, publishedAt: row.publishedAt, kind: "unbriefed" });
+      continue;
+    }
+    if (recapNeedsRewrite(row, input.ttsVoice, input.briefLength)) {
+      items.push({ id: row.id, publishedAt: row.publishedAt, kind: "rewrite" });
+    }
+  }
+  return items;
 }
 
 export async function countUnbriefedFollowedEpisodes(userId: string) {
   const prisma = getPrisma();
   const follows = await prisma.follow.findMany({
     where: { userId },
-    select: { showId: true, createdAt: true, ttsVoice: true },
+    select: { showId: true, createdAt: true, ttsVoice: true, briefLength: true },
   });
   let count = 0;
   for (const follow of follows) {
-    const ids = await windowedUnbriefedEpisodes({
+    const items = await windowedFollowedWork({
       showId: follow.showId,
       followedAt: follow.createdAt,
       ttsVoice: follow.ttsVoice,
+      briefLength: follow.briefLength,
     });
-    count += ids.length;
+    count += items.filter((item) => item.kind === "unbriefed").length;
   }
   return count;
 }
 
-export async function collectWindowedAutoBriefIds(input: {
+export async function collectWindowedFollowedWork(input: {
   userId?: string;
   showId?: string;
-}): Promise<string[]> {
+}): Promise<WindowedBriefWork[]> {
   const prisma = getPrisma();
   const follows = await prisma.follow.findMany({
     where: {
       ...(input.userId ? { userId: input.userId } : {}),
       ...(input.showId ? { showId: input.showId } : {}),
     },
-    select: { showId: true, createdAt: true, ttsVoice: true, userId: true },
+    select: { showId: true, createdAt: true, ttsVoice: true, briefLength: true, userId: true },
   });
 
-  const earliest = new Map<string, { followedAt: Date; ttsVoice: string }>();
+  const earliest = new Map<
+    string,
+    { followedAt: Date; ttsVoice: string; briefLength: string }
+  >();
   for (const follow of follows) {
     const current = earliest.get(follow.showId);
     if (!current || follow.createdAt < current.followedAt) {
       earliest.set(follow.showId, {
         followedAt: follow.createdAt,
         ttsVoice: follow.ttsVoice,
+        briefLength: follow.briefLength,
       });
     }
   }
 
-  const items: { id: string; publishedAt: Date }[] = [];
+  const items: WindowedBriefWork[] = [];
   for (const [showId, meta] of earliest) {
     items.push(
-      ...(await windowedUnbriefedEpisodes({
+      ...(await windowedFollowedWork({
         showId,
         followedAt: meta.followedAt,
         ttsVoice: meta.ttsVoice,
+        briefLength: meta.briefLength,
       })),
     );
   }
-  return orderIdsByPublishedAt(items);
+  return items;
+}
+
+export async function collectWindowedAutoBriefIds(input: {
+  userId?: string;
+  showId?: string;
+}): Promise<string[]> {
+  return orderAutoBriefQueue(await collectWindowedFollowedWork(input));
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {
-  const ids = await collectWindowedAutoBriefIds({ userId });
-  return ids.length;
+  const items = await collectWindowedFollowedWork({ userId });
+  return items.filter((item) => item.kind === "unbriefed").length;
+}
+
+export type RecapRewriteReason = "missing" | "voice" | "length" | null;
+
+export function recapRewriteReason(
+  episode: {
+    brief?: {
+      sourceType?: string | null;
+      spokenRecap?: string | null;
+      briefLength?: string | null;
+      sourceLimited?: boolean | null;
+    } | null;
+    recapAudio?: { durationSeconds?: number | null; voiceId?: string | null } | null;
+  },
+  requestedVoice?: string | null,
+  requestedLength?: string | null,
+): RecapRewriteReason {
+  const brief = episode.brief;
+  if (!brief || brief.sourceType !== "transcript" || !episode.recapAudio) return "missing";
+
+  const voice = parseTtsVoice(requestedVoice ?? DEFAULT_TTS_VOICE);
+  const storedVoice = parseTtsVoice(episode.recapAudio.voiceId ?? DEFAULT_TTS_VOICE);
+  if (storedVoice !== voice) return "voice";
+  if (brief.sourceLimited) return null;
+
+  const length = parseBriefLength(requestedLength ?? brief.briefLength);
+  const audioSeconds = episode.recapAudio.durationSeconds ?? 0;
+  // Prefer playable duration. Words alone must not re-queue a Ready 8–12 min recap.
+  if (audioSeconds > 0) {
+    return recapAudioInBand(audioSeconds, length) ? null : "length";
+  }
+  if (brief.spokenRecap && !spokenRecapInBand(brief.spokenRecap, length)) return "length";
+  return null;
 }
 
 export function recapNeedsRewrite(
@@ -120,18 +188,9 @@ export function recapNeedsRewrite(
     recapAudio?: { durationSeconds?: number | null; voiceId?: string | null } | null;
   },
   requestedVoice?: string | null,
+  requestedLength?: string | null,
 ): boolean {
-  const brief = episode.brief;
-  if (!brief || brief.sourceType !== "transcript" || !episode.recapAudio) return true;
-  const voice = parseTtsVoice(requestedVoice ?? DEFAULT_TTS_VOICE);
-  const storedVoice = parseTtsVoice(episode.recapAudio.voiceId ?? DEFAULT_TTS_VOICE);
-  if (storedVoice !== voice) return true;
-  if (brief.sourceLimited) return false;
-  const length = parseBriefLength(brief.briefLength);
-  if (brief.spokenRecap && !spokenRecapInBand(brief.spokenRecap, length)) return true;
-  const audioSeconds = episode.recapAudio.durationSeconds;
-  if (audioSeconds && audioSeconds > 0 && !recapAudioInBand(audioSeconds, length)) return true;
-  return false;
+  return recapRewriteReason(episode, requestedVoice, requestedLength) !== null;
 }
 
 export async function getFollowedShows(userId: string) {

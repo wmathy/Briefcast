@@ -96,6 +96,35 @@ describe("recapNeedsRewrite", () => {
       }),
     ).toBe(true);
   });
+
+  it("does not re-queue a Ready recap whose playable audio is in band", () => {
+    expect(
+      recapNeedsRewrite({
+        brief: {
+          sourceType: "transcript",
+          spokenRecap: Array.from({ length: 1900 }, (_, i) => `word${i}`).join(" "),
+          briefLength: "medium",
+          sourceLimited: false,
+        },
+        recapAudio: { durationSeconds: 9 * 60 + 4, voiceId: "eve" },
+      }),
+    ).toBe(false);
+  });
+
+  it("rewrites Ready audio when follow length or voice actually changed", () => {
+    const ready = {
+      brief: {
+        sourceType: "transcript" as const,
+        spokenRecap: Array.from({ length: 1500 }, (_, i) => `word${i}`).join(" "),
+        briefLength: "medium",
+        sourceLimited: false,
+      },
+      recapAudio: { durationSeconds: 9 * 60 + 4, voiceId: "eve" },
+    };
+    expect(recapNeedsRewrite(ready, "eve", "long")).toBe(true);
+    expect(recapNeedsRewrite(ready, "ara", "medium")).toBe(true);
+    expect(recapNeedsRewrite(ready, "eve", "medium")).toBe(false);
+  });
 });
 
 describe("recap audio band", () => {

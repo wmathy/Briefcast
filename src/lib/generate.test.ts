@@ -142,4 +142,20 @@ describe("planBriefGeneration", () => {
       }),
     ).toBe("already-published");
   });
+
+  it("treats a Ready in-band recap as published even if words sit slightly outside the band", () => {
+    expect(
+      planBriefGeneration({
+        hasCompleteTranscript: false,
+        existingSourceType: "transcript",
+        spokenRecap: words(1900),
+        storedLength: "medium",
+        sourceLimited: false,
+        audioSeconds: 9 * 60 + 4,
+        requestedLength: "medium",
+        storedVoice: "eve",
+        requestedVoice: "eve",
+      }),
+    ).toBe("already-published");
+  });
 });

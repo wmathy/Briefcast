@@ -17,7 +17,7 @@ export async function POST(
 
   const { id } = await context.params;
   try {
-    const result = await generateEpisodeBrief(id, { userId: user.id });
+    const result = await generateEpisodeBrief(id, { userId: user.id, force: true });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof MissingXaiKeyError) {

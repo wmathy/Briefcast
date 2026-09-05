@@ -23,6 +23,12 @@ describe("refreshStatusLabel", () => {
     expect(refreshHasMore({ remaining: 2, generated: 0 })).toBe(true);
     expect(refreshHasMore({ reason: "transcript-in-progress", generated: 0, remaining: 1 })).toBe(true);
     expect(refreshStatusLabel({ reason: "transcript-in-progress" })).toBe("Transcribing…");
+    expect(
+      refreshStatusLabel({
+        reason: "transcript-in-progress",
+        focusTitle: "#2549 - Jared Diamond",
+      }),
+    ).toBe("Transcribing #2549 - Jared Diamond…");
     expect(refreshShouldContinue(504, { generated: 0 })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, generated: 0, errors: ["xAI TTS timed out"] })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, reason: "transcript-in-progress", continuing: true })).toBe(

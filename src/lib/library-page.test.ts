@@ -31,6 +31,12 @@ describe("library homepage queue", () => {
     expect(source).toContain("AutoGenerateLatest");
     expect(source).toContain("countLatestFollowedNeedingBrief");
   });
+
+  it("uses the unbriefed counter for waiting, not the Ready play queue", () => {
+    expect(source).toContain("countUnbriefedFollowedEpisodes");
+    expect(source).toContain("waiting");
+    expect(source).toContain("getFollowedBriefQueue");
+  });
 });
 
 

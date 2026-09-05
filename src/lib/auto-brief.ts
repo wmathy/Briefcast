@@ -1,16 +1,24 @@
 import { getPrisma } from "@/lib/db";
 import { hasXaiKey } from "@/lib/env";
-import { generateEpisodeBrief, purgeNotesOnlyBriefs, resolveEpisodeTtsVoice } from "@/lib/generate";
+import {
+  generateEpisodeBrief,
+  purgeNotesOnlyBriefs,
+  resolveEpisodeBriefLength,
+  resolveEpisodeTtsVoice,
+} from "@/lib/generate";
 import { FULL_TRANSCRIPT_UNAVAILABLE } from "@/lib/transcript-complete";
 import {
   AUTO_BRIEF_LOOKAHEAD,
   episodeNeedsSpokenBrief,
   isUnfinishedSttJob,
-  orderIdsByPublishedAt,
   shouldAdvanceOlderEpisode,
   takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
-import { collectWindowedAutoBriefIds, recapNeedsRewrite } from "@/lib/queue";
+import {
+  collectWindowedAutoBriefIds,
+  collectWindowedFollowedWork,
+  recapNeedsRewrite,
+} from "@/lib/queue";
 import { syncShowEpisodes } from "@/lib/podcasts";
 
 export {
@@ -55,7 +63,10 @@ export async function generateAutoBriefs(
     where: { id: { in: episodeIds } },
     select: { id: true, publishedAt: true },
   });
-  const orderedIds = orderIdsByPublishedAt(dated);
+  const known = new Set(dated.map((row) => row.id));
+  // Keep collectWindowed order (unbriefed newest, then Ready rewrites). Do not
+  // re-sort by publishedAt or a Ready #185 can jump ahead of #2549.
+  const orderedIds = episodeIds.filter((id) => known.has(id));
   const jobs = await prisma.sttJob.findMany({
     where: { episodeId: { in: orderedIds } },
     select: { episodeId: true, status: true, text: true },
@@ -69,6 +80,7 @@ export async function generateAutoBriefs(
   let inProgress = 0;
   let progressed = false;
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
+  let focusTitle: string | null = null;
   const errors: string[] = [];
 
   for (const id of orderedIds) {
@@ -81,14 +93,18 @@ export async function generateAutoBriefs(
       continue;
     }
     const requestedVoice = await resolveEpisodeTtsVoice(episode.showId, options?.userId);
-    if (!episodeNeedsSpokenBrief(episode) && !recapNeedsRewrite(episode, requestedVoice)) {
+    const requestedLength = await resolveEpisodeBriefLength(episode.showId, options?.userId);
+    if (!episodeNeedsSpokenBrief(episode) && !recapNeedsRewrite(episode, requestedVoice, requestedLength)) {
       skipped += 1;
       continue;
+    }
+    if (!focusTitle) {
+      focusTitle = episode.title;
     }
     try {
       const result = await generateEpisodeBrief(id, {
         userId: options?.userId,
-        force: recapNeedsRewrite(episode, requestedVoice),
+        force: false,
       });
       if (result.reason === "transcript-in-progress" && "sttBusy" in result && result.sttBusy) {
         inProgress += 1;
@@ -132,6 +148,7 @@ export async function generateAutoBriefs(
     skipped,
     inProgress,
     progressed,
+    focusTitle,
     errors,
     reason:
       progressReason ??
@@ -197,7 +214,8 @@ export async function refreshFollowedBriefs(options?: {
   const batch = takeAutoBriefBatch(poll.autoBriefIds, AUTO_BRIEF_LOOKAHEAD);
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
   // Recount after this turn so a persisted draft whose TTS timed out stays queued.
-  const stillNeeded = await collectWindowedAutoBriefIds({
+  // Waiting / hop remaining is unbriefed-only — Ready rewrites do not keep hops on #185.
+  const stillNeeded = await collectWindowedFollowedWork({
     userId: options?.userId,
     showId: options?.showId,
   });
@@ -205,7 +223,7 @@ export async function refreshFollowedBriefs(options?: {
     ...poll,
     ...generation,
     generating: batch.toGenerate.length,
-    remaining: stillNeeded.length,
+    remaining: stillNeeded.filter((item) => item.kind === "unbriefed").length,
     errors: [...poll.syncErrors, ...generation.errors],
   };
 }

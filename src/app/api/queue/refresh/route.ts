@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       skipped: result.skipped,
       progressed: result.progressed,
       continuing,
+      focusTitle: result.focusTitle,
       canGenerate: hasXaiKey(),
       reason: result.reason,
       errors: result.errors,

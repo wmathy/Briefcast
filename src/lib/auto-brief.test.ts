@@ -5,6 +5,7 @@ import {
   episodeNeedsSpokenBrief,
   isCronRequestAuthorized,
   isUnfinishedSttJob,
+  orderAutoBriefQueue,
   orderIdsByPublishedAt,
   shouldAdvanceOlderEpisode,
   takeAutoBriefBatch,
@@ -47,6 +48,19 @@ describe("orderIdsByPublishedAt", () => {
         { id: "jre-newest", publishedAt: new Date("2026-09-04T18:00:00.000Z") },
       ]),
     ).toEqual(["jre-newest", "tucker-new", "tucker-old"]);
+  });
+});
+
+describe("orderAutoBriefQueue", () => {
+  it("briefs never-published newest episodes before Ready length/voice rewrites", () => {
+    expect(
+      orderAutoBriefQueue([
+        { id: "mma-185-ready", publishedAt: new Date("2026-09-02T00:00:00.000Z"), kind: "rewrite" },
+        { id: "jre-2549", publishedAt: new Date("2026-09-03T00:00:00.000Z"), kind: "unbriefed" },
+        { id: "tucker-newest", publishedAt: new Date("2026-09-04T00:00:00.000Z"), kind: "unbriefed" },
+        { id: "jre-2548-ready", publishedAt: new Date("2026-09-01T00:00:00.000Z"), kind: "rewrite" },
+      ]),
+    ).toEqual(["tucker-newest", "jre-2549", "mma-185-ready", "jre-2548-ready"]);
   });
 });
 

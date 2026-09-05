@@ -11,14 +11,20 @@ export type RefreshResult = {
   errors?: string[];
   continuing?: boolean;
   progressed?: boolean;
+  focusTitle?: string | null;
 };
+
+function withFocus(label: string, title?: string | null): string {
+  const name = title?.trim();
+  return name ? `${label.replace(/…$/, "")} ${name}…` : label;
+}
 
 export function refreshStatusLabel(data: RefreshResult): string {
   if (data.reason === "transcript-in-progress") {
-    return "Transcribing…";
+    return withFocus("Transcribing…", data.focusTitle);
   }
   if (data.reason === "audio-pending") {
-    return "Writing audio…";
+    return withFocus("Writing audio…", data.focusTitle);
   }
   if (data.reason === "no-full-transcript") {
     return "No full transcript yet";

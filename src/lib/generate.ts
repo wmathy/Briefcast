@@ -20,7 +20,7 @@ import {
 } from "@/lib/brief-length";
 import { mp3PlaybackDurationSeconds } from "@/lib/tts";
 import { TranscriptInProgressError } from "@/lib/stt-job";
-import { recapNeedsRewrite } from "@/lib/queue";
+import { recapRewriteReason } from "@/lib/queue";
 import { markShowBriefed } from "@/lib/brief-ledger";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
@@ -120,6 +120,15 @@ export function planBriefGeneration(input: {
   const reuseWritten = canReuseWrittenBrief(input);
   const reuseAudio = canReuseRecapAudio(input);
   if (reuseWritten && reuseAudio) return "already-published";
+  // Ready + in-band audio + matching voice/length is done even if words sit a bit outside the band.
+  if (
+    reuseAudio &&
+    input.existingSourceType === "transcript" &&
+    Boolean(input.spokenRecap?.trim()) &&
+    parseBriefLength(input.storedLength) === input.requestedLength
+  ) {
+    return "already-published";
+  }
   if (reuseWritten) return "tts-only";
   if (input.hasCompleteTranscript) return "write-then-tts";
   return isPublishedTranscriptBrief({ sourceType: input.existingSourceType })
@@ -196,6 +205,11 @@ export async function generateEpisodeBrief(
     options?.briefLength ?? (await resolveEpisodeBriefLength(episode.showId, options?.userId));
   const ttsVoice = await resolveEpisodeTtsVoice(episode.showId, options?.userId);
 
+  const rewriteReason = recapRewriteReason(episode, ttsVoice, briefLength);
+  const publishedReady =
+    isPublishedTranscriptBrief(episode.brief) && Boolean(episode.recapAudio);
+  const explicitForce = options?.force === true;
+
   const reusePlan = planBriefGeneration({
     hasCompleteTranscript: false,
     existingSourceType: episode.brief?.sourceType,
@@ -208,7 +222,10 @@ export async function generateEpisodeBrief(
     requestedVoice: ttsVoice,
   });
 
-  if (reusePlan === "already-published") {
+  if (
+    !explicitForce &&
+    (reusePlan === "already-published" || (publishedReady && rewriteReason === null))
+  ) {
     return {
       episodeId: episode.id,
       published: true,
@@ -223,7 +240,11 @@ export async function generateEpisodeBrief(
     };
   }
 
-  if (reusePlan === "tts-only" && episode.brief) {
+  if (
+    !explicitForce &&
+    episode.brief &&
+    (reusePlan === "tts-only" || rewriteReason === "voice")
+  ) {
     return persistRecapAudioAfterTts({
       episodeId: episode.id,
       showId: episode.showId,
@@ -276,7 +297,7 @@ export async function generateEpisodeBrief(
     throw error;
   }
 
-  const force = (options?.force ?? true) || recapNeedsRewrite(episode);
+  const force = explicitForce || rewriteReason !== null;
   const decision = shouldPublishBrief({
     hasCompleteTranscript: Boolean(source),
     existingSourceType: episode.brief?.sourceType,
