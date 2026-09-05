@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { PIPELINE_MAX_HOPS, pipelineHopUrl, pipelineShouldHop } from "./pipeline-hop";
+import {
+  HOP_ACK_MS,
+  PIPELINE_MAX_HOPS,
+  isPipelineHopAuthorized,
+  pipelineHopHeaders,
+  pipelineHopSecret,
+  pipelineHopUrl,
+  pipelineShouldHop,
+} from "./pipeline-hop";
 
 describe("pipelineShouldHop", () => {
   it("hops when this turn advanced STT, wrote a brief, or published audio", () => {
@@ -43,5 +51,38 @@ describe("pipelineHopUrl", () => {
       "https://briefcast-git-preview.vercel.app/api/pipeline/continue?hop=2&userId=user-1&showId=show-1",
     );
     expect(PIPELINE_MAX_HOPS).toBe(80);
+    expect(HOP_ACK_MS).toBeGreaterThanOrEqual(25_000);
+  });
+});
+
+describe("pipeline hop auth", () => {
+  const originalCron = process.env.CRON_SECRET;
+  const originalAuth = process.env.AUTH_SECRET;
+  const originalVercel = process.env.VERCEL;
+
+  function restore() {
+    if (originalCron === undefined) delete process.env.CRON_SECRET;
+    else process.env.CRON_SECRET = originalCron;
+    if (originalAuth === undefined) delete process.env.AUTH_SECRET;
+    else process.env.AUTH_SECRET = originalAuth;
+    if (originalVercel === undefined) delete process.env.VERCEL;
+    else process.env.VERCEL = originalVercel;
+  }
+
+  it("uses AUTH_SECRET on Vercel when CRON_SECRET is unset so Preview hops are not 401", () => {
+    delete process.env.CRON_SECRET;
+    process.env.AUTH_SECRET = "preview-auth";
+    process.env.VERCEL = "1";
+    expect(pipelineHopSecret()).toBe("preview-auth");
+    expect(pipelineHopHeaders()).toEqual({ authorization: "Bearer preview-auth" });
+    expect(
+      isPipelineHopAuthorized(
+        new Request("http://localhost/api/pipeline/continue", {
+          headers: { authorization: "Bearer preview-auth" },
+        }),
+      ),
+    ).toBe(true);
+    expect(isPipelineHopAuthorized(new Request("http://localhost/api/pipeline/continue"))).toBe(false);
+    restore();
   });
 });

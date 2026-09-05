@@ -33,6 +33,9 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./stt-job.ts")).toContain("Even the last chunk returns in-progress");
     expect(read("./queue.ts")).toContain("orderIdsByPublishedAt");
     expect(read("./auto-brief.ts")).toContain("shouldAdvanceOlderEpisode");
+    expect(read("./pipeline-hop.ts")).toContain("AUTH_SECRET");
+    expect(read("./pipeline-hop.ts")).not.toContain("AbortSignal.timeout");
+    expect(read("./refresh-status.ts")).toContain("Preview hops can 401");
   });
 });
 

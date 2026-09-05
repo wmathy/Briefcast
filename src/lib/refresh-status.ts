@@ -57,8 +57,17 @@ export function refreshHasMore(data: RefreshResult): boolean {
 }
 
 export function refreshShouldContinue(status: number, data: RefreshResult): boolean {
-  if (data.continuing) return false;
+  // Do not stop just because a hop was scheduled — Preview hops can 401 or die
+  // after() leftover time. Library keeps a backup loop.
   if (status === 504 || status === 502) return true;
   if (data.reason === "transcript-in-progress") return true;
   return refreshHasMore(data);
+}
+
+/** Back off while a server hop may be holding the STT lock. */
+export function refreshContinueDelayMs(data: RefreshResult): number {
+  if (data.continuing || data.reason === "transcript-in-progress" || data.reason === "audio-pending") {
+    return 20_000;
+  }
+  return 0;
 }

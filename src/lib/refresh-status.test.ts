@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { refreshHasMore, refreshShouldContinue, refreshStatusLabel } from "./refresh-status";
+import {
+  refreshContinueDelayMs,
+  refreshHasMore,
+  refreshShouldContinue,
+  refreshStatusLabel,
+} from "./refresh-status";
 
 describe("refreshStatusLabel", () => {
   it("reports a finished auto-brief, not a pending background write", () => {
@@ -21,7 +26,10 @@ describe("refreshStatusLabel", () => {
     expect(refreshShouldContinue(504, { generated: 0 })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, generated: 0, errors: ["xAI TTS timed out"] })).toBe(true);
     expect(refreshShouldContinue(200, { remaining: 1, reason: "transcript-in-progress", continuing: true })).toBe(
-      false,
+      true,
+    );
+    expect(refreshContinueDelayMs({ continuing: true, reason: "transcript-in-progress" })).toBeGreaterThanOrEqual(
+      15_000,
     );
     expect(refreshHasMore({ reason: "audio-pending", generated: 0, remaining: 1 })).toBe(true);
     expect(refreshStatusLabel({ reason: "audio-pending" })).toBe("Writing audio…");

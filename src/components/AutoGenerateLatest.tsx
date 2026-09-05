@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { refreshShouldContinue, refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
+import {
+  refreshContinueDelayMs,
+  refreshShouldContinue,
+  refreshStatusLabel,
+  type RefreshResult,
+} from "@/lib/refresh-status";
 
 /** Keeps writing the latest unbriefed followed episode until none remain or a write fails. */
 export function AutoGenerateLatest({ needed }: { needed: boolean }) {
@@ -34,6 +39,10 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
         }
         setStatus(refreshStatusLabel(data));
         more = refreshShouldContinue(response.status, data);
+        const delayMs = refreshContinueDelayMs(data);
+        if (more && delayMs > 0 && !cancelled) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
         if (
           data.errors &&
           data.errors.length > 0 &&

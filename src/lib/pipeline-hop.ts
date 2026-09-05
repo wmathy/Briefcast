@@ -3,7 +3,8 @@ import { isCronRequestAuthorized } from "@/lib/auto-brief-policy";
 
 /** One hop is one 300s step. A 3-hour STT + write + TTS fits in this cap. */
 export const PIPELINE_MAX_HOPS = 80;
-const HOP_ACK_MS = 8_000;
+/** Cold Preview starts often exceed 8s. Aborting before 202 kills continue+after(). */
+export const HOP_ACK_MS = 25_000;
 
 export type PipelineHopResult = {
   remaining?: number;
@@ -37,12 +38,24 @@ export function pipelineHopUrl(input: {
   return url.toString();
 }
 
+/** Preview often has AUTH_SECRET but not a usable CRON_SECRET on non-cron invocations. */
+export function pipelineHopSecret(): string | null {
+  return process.env.CRON_SECRET?.trim() || process.env.AUTH_SECRET?.trim() || null;
+}
+
 export function pipelineHopHeaders(): HeadersInit {
-  const secret = process.env.CRON_SECRET?.trim();
+  const secret = pipelineHopSecret();
   return secret ? { authorization: `Bearer ${secret}` } : {};
 }
 
 export function isPipelineHopAuthorized(request: Request): boolean {
+  const header = request.headers.get("authorization");
+  const secrets = [process.env.CRON_SECRET, process.env.AUTH_SECRET]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  if (secrets.length > 0) {
+    return secrets.some((secret) => header === `Bearer ${secret}`);
+  }
   return isCronRequestAuthorized(request);
 }
 
@@ -50,7 +63,7 @@ export function requestOrigin(request: Request): string {
   return new URL(request.url).origin;
 }
 
-/** Start the next invocation. Abort after ACK so this function does not wait 300s. */
+/** Start the next invocation. Wait for the 202 ACK. Do not abort — that kills continue+after(). */
 export async function dispatchPipelineHop(input: {
   origin: string;
   hop: number;
@@ -63,16 +76,16 @@ export async function dispatchPipelineHop(input: {
   }
   const url = pipelineHopUrl(input);
   try {
-    await fetch(url, {
+    const response = await fetch(url, {
       method: "POST",
       headers: pipelineHopHeaders(),
       cache: "no-store",
-      signal: AbortSignal.timeout(HOP_ACK_MS),
     });
-  } catch (error) {
-    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+    if (response.status === 202 || response.ok) {
       return;
     }
+    console.error("[pipeline] hop rejected", response.status, await response.text().catch(() => ""));
+  } catch (error) {
     console.error("[pipeline] hop failed", error instanceof Error ? error.message : error);
   }
 }
