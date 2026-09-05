@@ -20,41 +20,51 @@ export function SearchShows() {
     event.preventDefault();
     setSearching(true);
     setError(null);
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-    const data = (await response.json()) as { results?: ItunesPodcast[]; error?: string };
-    setSearching(false);
-    if (!response.ok) {
-      setError(data.error ?? "Search failed.");
-      return;
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = (await response.json().catch(() => ({}))) as { results?: ItunesPodcast[]; error?: string };
+      if (!response.ok) {
+        setError(data.error ?? "Search failed.");
+        return;
+      }
+      setResults(data.results ?? []);
+    } catch {
+      setError("Could not reach Briefcast. Try again.");
+    } finally {
+      setSearching(false);
     }
-    setResults(data.results ?? []);
   }
 
   async function follow(podcast: ItunesPodcast) {
     setFollowingId(podcast.itunesId);
     setError(null);
-    const response = await fetch("/api/follows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...podcast,
-        briefLength: lengths[podcast.itunesId] ?? defaultLength,
-      }),
-    });
-    const data = (await response.json()) as {
-      showId?: string;
-      error?: string;
-      warning?: string;
-      generated?: number;
-      fetched?: number;
-    };
-    setFollowingId(null);
-    if (!response.ok || !data.showId) {
-      setError(data.error ?? "Could not follow that show.");
-      return;
+    try {
+      const response = await fetch("/api/follows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...podcast,
+          briefLength: lengths[podcast.itunesId] ?? defaultLength,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        showId?: string;
+        error?: string;
+        warning?: string;
+        generated?: number;
+        fetched?: number;
+      };
+      if (!response.ok || !data.showId) {
+        setError(data.error ?? "Could not follow that show.");
+        return;
+      }
+      router.push(`/shows/${data.showId}`);
+      router.refresh();
+    } catch {
+      setError("Could not reach Briefcast. Try again.");
+    } finally {
+      setFollowingId(null);
     }
-    router.push(`/shows/${data.showId}`);
-    router.refresh();
   }
 
   return (
@@ -64,12 +74,13 @@ export function SearchShows() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search podcasts"
-          className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2.5 outline-none ring-accent focus:ring-2"
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 outline-none ring-accent focus:ring-2"
         />
         <button
           type="submit"
           disabled={searching || !query.trim()}
-          className="rounded-full bg-accent px-5 py-2.5 font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+          aria-busy={searching}
+          className="tap pressable rounded-full bg-accent px-5 font-medium text-bg disabled:opacity-60"
         >
           {searching ? "Searching…" : "Search"}
         </button>
@@ -110,8 +121,9 @@ export function SearchShows() {
               <button
                 type="button"
                 disabled={followingId === podcast.itunesId}
+                aria-busy={followingId === podcast.itunesId}
                 onClick={() => follow(podcast)}
-                className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
+                className="tap pressable shrink-0 rounded-full border border-line px-3 text-sm"
               >
                 {followingId === podcast.itunesId ? "Following…" : "Follow"}
               </button>

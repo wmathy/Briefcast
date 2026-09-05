@@ -38,7 +38,7 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
           <img src={show.artworkUrl} alt="" className="h-24 w-24 rounded-2xl object-cover" />
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-4xl">{show.title}</h1>
+          <h1 className="font-display text-3xl leading-tight sm:text-4xl">{show.title}</h1>
           <p className="text-muted">{show.artist}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -66,7 +66,7 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
             <li key={episode.id}>
               <Link
                 href={`/episodes/${episode.id}`}
-                className="block rounded-2xl border border-line bg-bg-card p-4 hover:border-accent"
+                className="card-link block min-h-11 rounded-2xl border border-line bg-bg-card p-4"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="font-medium">{episode.title}</h2>

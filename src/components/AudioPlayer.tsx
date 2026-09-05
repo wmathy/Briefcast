@@ -100,7 +100,7 @@ export function AudioPlayer({ src, durationHint }: { src: string; durationHint?:
           type="button"
           onClick={togglePlay}
           aria-label={playing ? "Pause" : "Play"}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-bg hover:bg-accent-deep"
+          className="tap pressable flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent text-bg"
         >
           {playing ? (
             <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
@@ -154,7 +154,7 @@ export function AudioPlayer({ src, durationHint }: { src: string; durationHint?:
             const index = RATES.indexOf(rate as (typeof RATES)[number]);
             applyRate(RATES[(index + 1) % RATES.length] ?? DEFAULT_PLAYBACK_RATE);
           }}
-          className="w-9 shrink-0 text-right text-[11px] tabular-nums text-muted hover:text-ink"
+          className="tap pressable w-11 shrink-0 rounded-full border border-line text-center text-xs tabular-nums text-ink"
         >
           {rate === 1 ? "1×" : `${rate}×`}
         </button>

@@ -30,9 +30,9 @@ export function BriefLengthPicker({
             aria-checked={selected}
             disabled={disabled}
             onClick={() => onChange(length)}
-            className={`rounded-full px-3 py-1.5 text-sm ${
-              selected ? "bg-accent text-bg" : "border border-line text-muted hover:border-accent"
-            } disabled:opacity-60`}
+            className={`tap pressable rounded-full px-3 text-sm ${
+              selected ? "bg-accent text-bg" : "border border-line text-ink/80"
+            }`}
           >
             {spec.label}
           </button>

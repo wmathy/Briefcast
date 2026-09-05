@@ -12,7 +12,7 @@ export default async function SignupPage() {
       <AuthForm mode="signup" />
       <p className="text-sm text-muted">
         Already have an account?{" "}
-        <Link className="text-accent hover:underline" href="/login">
+        <Link className="tap pressable inline-flex items-center rounded-md text-accent underline" href="/login">
           Log in
         </Link>
       </p>

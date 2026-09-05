@@ -52,7 +52,10 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Link href={`/shows/${episode.show.id}`} className="text-sm text-muted hover:text-ink">
+      <Link
+        href={`/shows/${episode.show.id}`}
+        className="tap pressable inline-flex items-center rounded-md px-1 text-sm text-ink/80"
+      >
         ← {episode.show.title}
       </Link>
 

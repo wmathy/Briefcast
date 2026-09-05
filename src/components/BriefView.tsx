@@ -42,7 +42,7 @@ export function BriefView({
         <h1 className="font-display text-3xl leading-tight text-ink sm:text-4xl">{episodeTitle}</h1>
         <p className="text-sm text-muted">{meta.join(" · ")}</p>
         {link ? (
-          <a className="text-sm text-accent underline-offset-2 hover:underline" href={link} target="_blank" rel="noreferrer">
+          <a className="tap pressable inline-flex items-center rounded-md text-sm text-accent underline" href={link} target="_blank" rel="noreferrer">
             Episode
           </a>
         ) : null}

@@ -28,13 +28,13 @@ export default async function LibraryPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-4xl">Library</h1>
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="font-display text-3xl sm:text-4xl">Library</h1>
+        <div className="flex flex-wrap items-center gap-2">
           {follows.length > 0 ? <RefreshLibraryButton /> : null}
           <Link
             href="/discover"
-            className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep"
+            className="tap pressable inline-flex items-center rounded-full bg-accent px-4 text-sm font-medium text-bg"
           >
             Find a podcast
           </Link>
@@ -63,11 +63,11 @@ export default async function LibraryPage() {
               <li key={episode.id}>
                 <Link
                   href={`/episodes/${episode.id}`}
-                  className="block rounded-2xl border border-line bg-bg-raised p-4 hover:border-accent"
+                  className="card-link block min-h-11 rounded-2xl border border-line bg-bg-raised p-4"
                 >
                   <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
-                  <p className="font-medium">{episode.title}</p>
-                  <p className="text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
+                  <p className="font-medium leading-snug">{episode.title}</p>
+                  <p className="mt-1 text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
                 </Link>
               </li>
             ))}
@@ -83,23 +83,23 @@ export default async function LibraryPage() {
             Nothing here
           </div>
         ) : (
-          <ul className="grid gap-4 sm:grid-cols-2">
+          <ul className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             {follows.map(({ show, briefLength }) => (
               <li key={show.id}>
                 <Link
                   href={`/shows/${show.id}`}
-                  className="flex gap-3 rounded-2xl border border-line bg-bg-card p-3 hover:border-accent"
+                  className="card-link flex min-h-11 gap-3 rounded-2xl border border-line bg-bg-card p-3 sm:p-4"
                 >
                   {show.artworkUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={show.artworkUrl} alt="" className="h-16 w-16 rounded-xl object-cover" />
+                    <img src={show.artworkUrl} alt="" className="h-20 w-20 shrink-0 rounded-xl object-cover sm:h-16 sm:w-16" />
                   ) : (
-                    <div className="h-16 w-16 rounded-xl bg-bg" />
+                    <div className="h-20 w-20 shrink-0 rounded-xl bg-bg sm:h-16 sm:w-16" />
                   )}
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{show.title}</p>
-                    <p className="truncate text-sm text-muted">{show.artist}</p>
-                    <p className="mt-1 truncate text-xs text-muted">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium leading-snug">{show.title}</p>
+                    <p className="mt-0.5 text-sm text-muted">{show.artist}</p>
+                    <p className="mt-1 line-clamp-2 text-xs text-muted">
                       {formatBriefLengthShort(briefLength)}
                       {show.episodes[0] ? ` · ${show.episodes[0].title}` : ""}
                     </p>

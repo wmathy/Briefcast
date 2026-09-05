@@ -17,11 +17,14 @@ export default async function HomePage() {
       <div className="flex flex-wrap gap-3">
         <Link
           href="/signup"
-          className="rounded-full bg-accent px-5 py-2.5 font-medium text-bg hover:bg-accent-deep"
+          className="tap pressable inline-flex items-center rounded-full bg-accent px-5 font-medium text-bg"
         >
           Sign up
         </Link>
-        <Link href="/login" className="rounded-full border border-line px-5 py-2.5 hover:border-accent">
+        <Link
+          href="/login"
+          className="tap pressable inline-flex items-center rounded-full border border-line px-5"
+        >
           Log in
         </Link>
       </div>

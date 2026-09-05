@@ -67,5 +67,9 @@ export function AutoGenerateLatest({ needed }: { needed: boolean }) {
   }, [needed, router]);
 
   if (!status) return null;
-  return <p className="text-sm text-muted">{status}</p>;
+  return (
+    <p className="text-sm text-muted" role="status" aria-live="polite" aria-busy={needed}>
+      {status}
+    </p>
+  );
 }

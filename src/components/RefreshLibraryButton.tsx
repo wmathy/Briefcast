@@ -13,6 +13,7 @@ export function RefreshLibraryButton() {
     <button
       type="button"
       disabled={pending}
+      aria-busy={pending}
       onClick={async () => {
         setPending(true);
         try {
@@ -36,7 +37,7 @@ export function RefreshLibraryButton() {
           setPending(false);
         }
       }}
-      className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
+      className="tap pressable rounded-full border border-line px-4 text-sm disabled:opacity-60"
     >
       {pending ? "Checking…" : label}
     </button>

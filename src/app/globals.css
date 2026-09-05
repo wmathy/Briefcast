@@ -47,20 +47,74 @@ a {
 }
 
 button,
-input {
+input,
+select,
+a {
   font: inherit;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tap {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+.pressable {
+  transition:
+    transform 70ms ease,
+    filter 70ms ease,
+    border-color 70ms ease,
+    background-color 70ms ease,
+    color 70ms ease;
+}
+
+.pressable:active:not(:disabled) {
+  transform: scale(0.97);
+  filter: brightness(0.88);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pressable:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+}
+
+.pressable:disabled {
+  opacity: 0.65;
+}
+
+.card-link {
+  transition:
+    border-color 70ms ease,
+    background-color 70ms ease,
+    transform 70ms ease;
+}
+
+.card-link:active {
+  border-color: var(--accent);
+  transform: scale(0.995);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-link:hover {
+    border-color: var(--accent);
+  }
 }
 
 .audio-scrubber {
   -webkit-appearance: none;
   appearance: none;
-  height: 4px;
+  height: 2.75rem;
   border-radius: 999px;
   background: linear-gradient(
     to right,
     var(--accent) var(--progress, 0%),
     var(--line) var(--progress, 0%)
   );
+  background-size: 100% 12px;
+  background-position: center;
+  background-repeat: no-repeat;
   cursor: pointer;
 }
 
@@ -72,16 +126,17 @@ input {
 .audio-scrubber::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: var(--accent);
   border: 0;
+  box-shadow: 0 0 0 3px rgba(18, 17, 14, 0.45);
 }
 
 .audio-scrubber::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   background: var(--accent);
   border: 0;

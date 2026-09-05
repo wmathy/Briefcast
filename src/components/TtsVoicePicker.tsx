@@ -28,7 +28,7 @@ export function TtsVoicePicker({
         disabled={disabled}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="rounded-full border border-line bg-bg-card px-3 py-1.5 text-sm text-ink disabled:opacity-60"
+        className="tap min-h-11 rounded-full border border-line bg-bg-card px-3 text-sm text-ink disabled:opacity-60"
       >
         {options.map((voice) => (
           <option key={voice.id} value={voice.id} title={voice.hint}>

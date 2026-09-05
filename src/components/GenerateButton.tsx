@@ -35,28 +35,34 @@ export function GenerateButton({
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={async () => {
           setPending(true);
           setError(null);
-          const response = await fetch(`/api/episodes/${episodeId}/generate`, { method: "POST" });
-          const data = (await response.json()) as {
-            error?: string;
-            message?: string;
-            published?: boolean;
-          };
-          setPending(false);
-          if (!response.ok) {
-            setError(displayError(data.error ?? "Generate failed."));
-            return;
-          }
-          if (data.published === false) {
-            setError(displayError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE));
+          try {
+            const response = await fetch(`/api/episodes/${episodeId}/generate`, { method: "POST" });
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+              message?: string;
+              published?: boolean;
+            };
+            if (!response.ok) {
+              setError(displayError(data.error ?? "Generate failed."));
+              return;
+            }
+            if (data.published === false) {
+              setError(displayError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE));
+              router.refresh();
+              return;
+            }
             router.refresh();
-            return;
+          } catch {
+            setError("Could not reach Briefcast. Try again.");
+          } finally {
+            setPending(false);
           }
-          router.refresh();
         }}
-        className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+        className="tap pressable rounded-full bg-accent px-4 text-sm font-medium text-bg disabled:opacity-60"
       >
         {pending ? "Working…" : retryUnavailable ? "Retry" : briefLength ? "Rewrite" : "Generate"}
       </button>

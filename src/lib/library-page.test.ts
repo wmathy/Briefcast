@@ -38,6 +38,14 @@ describe("library homepage queue", () => {
     expect(source).toContain("getFollowedBriefQueue");
     expect(source).toContain("Ready to play");
   });
+
+  it("stacks Library actions and uses pressable cards on small screens", () => {
+    expect(source).toContain("flex-col gap-4 sm:flex-row");
+    expect(source).toContain("card-link");
+    expect(source).toContain("tap pressable");
+    expect(source).toContain("Find a podcast");
+    expect(source).not.toContain("hover:border-accent");
+  });
 });
 
 
