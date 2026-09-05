@@ -19,6 +19,7 @@ describe("brief audio player", () => {
     expect(source).toContain("tap pressable");
     expect(source).toContain("w-11");
     expect(source).not.toContain("hover:text-ink");
+    expect(source).toContain("bg-bg-card");
     expect(css).toContain("height: 2.75rem");
     expect(css).toContain("width: 22px");
   });

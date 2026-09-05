@@ -43,7 +43,8 @@ describe("mobile press and loading feedback", () => {
     expect(unfollow).not.toContain("hover:text-danger");
 
     const player = read("../components/AudioPlayer.tsx");
-    expect(player).toContain("border border-line");
+    expect(player).toContain("bg-bg-card");
+    expect(player).toContain("border-ink/35");
     expect(player).not.toContain("hover:text-ink");
   });
 

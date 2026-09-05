@@ -154,7 +154,7 @@ export function AudioPlayer({ src, durationHint }: { src: string; durationHint?:
             const index = RATES.indexOf(rate as (typeof RATES)[number]);
             applyRate(RATES[(index + 1) % RATES.length] ?? DEFAULT_PLAYBACK_RATE);
           }}
-          className="tap pressable w-11 shrink-0 rounded-full border border-line text-center text-xs tabular-nums text-ink"
+          className="tap pressable inline-flex w-11 shrink-0 items-center justify-center rounded-full border border-ink/35 bg-bg-card text-xs tabular-nums text-ink"
         >
           {rate === 1 ? "1×" : `${rate}×`}
         </button>
