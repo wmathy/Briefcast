@@ -138,22 +138,27 @@ export function useRecapAudio({
     src,
     onLoadedMetadata: (event: SyntheticEvent<HTMLAudioElement>) => {
       const audio = event.currentTarget;
+      if (!audio) return;
+      const time = audio.currentTime;
       const total = syncDuration(audio);
       applySavedPosition(audio, total);
       if (total > 0) {
         setLive((current) => ({
           playing: current?.playing ?? false,
-          currentTime: current?.currentTime ?? audio.currentTime,
+          currentTime: current?.currentTime ?? time,
           duration: total,
         }));
       }
     },
     onDurationChange: (event: SyntheticEvent<HTMLAudioElement>) => {
-      const total = syncDuration(event.currentTarget);
+      const audio = event.currentTarget;
+      if (!audio) return;
+      const time = audio.currentTime;
+      const total = syncDuration(audio);
       if (total > 0) {
         setLive((current) => ({
           playing: current?.playing ?? false,
-          currentTime: current?.currentTime ?? event.currentTarget.currentTime,
+          currentTime: current?.currentTime ?? time,
           duration: total,
         }));
       }
@@ -161,13 +166,15 @@ export function useRecapAudio({
     onTimeUpdate: (event: SyntheticEvent<HTMLAudioElement>) => {
       if (seekingRef.current) return;
       const audio = event.currentTarget;
+      if (!audio) return;
+      const time = audio.currentTime;
       const total = duration > 0 ? duration : audio.duration;
       setLive((current) => ({
         playing: current?.playing ?? !audio.paused,
-        currentTime: audio.currentTime,
+        currentTime: time,
         duration: total,
       }));
-      persist(audio.currentTime, total);
+      persist(time, total);
     },
     onPlay: () => {
       setLive((current) => ({
@@ -177,7 +184,7 @@ export function useRecapAudio({
       }));
     },
     onPause: (event: SyntheticEvent<HTMLAudioElement>) => {
-      const time = event.currentTarget.currentTime;
+      const time = event.currentTarget?.currentTime ?? currentTime;
       setLive((current) => ({
         playing: false,
         currentTime: time,
@@ -186,7 +193,7 @@ export function useRecapAudio({
       persist(time, duration, true);
     },
     onEnded: (event: SyntheticEvent<HTMLAudioElement>) => {
-      const total = duration > 0 ? duration : event.currentTarget.duration;
+      const total = duration > 0 ? duration : (event.currentTarget?.duration ?? 0);
       setLive({ playing: false, currentTime: total, duration: total });
       persist(total, total, true);
     },

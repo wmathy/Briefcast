@@ -35,6 +35,7 @@ describe("library queue play button", () => {
     expect(hook).toContain("readListenProgress");
     expect(hook).toContain("useSyncExternalStore");
     expect(hook).toContain("claimRecapPlayback");
+    expect(hook).not.toContain("current?.currentTime ?? event.currentTarget.currentTime");
     expect(hook).toContain("isListenComplete");
     expect(read("../components/AudioPlayer.tsx")).toContain("useRecapAudio");
     expect(read("../app/episodes/[id]/page.tsx")).toContain("episodeId={episode.id}");
