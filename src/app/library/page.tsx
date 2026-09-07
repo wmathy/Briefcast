@@ -12,6 +12,8 @@ import { formatBriefLengthShort } from "@/lib/brief-length";
 import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT } from "@/lib/transcript-complete";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
 import { AutoGenerateLatest } from "@/components/AutoGenerateLatest";
+import { QueueCard } from "@/components/QueueCard";
+import { durationHintForRecap } from "@/lib/recap-duration";
 
 export const dynamic = "force-dynamic";
 
@@ -61,14 +63,16 @@ export default async function LibraryPage() {
           <ul className="space-y-3">
             {queue.map((episode) => (
               <li key={episode.id}>
-                <Link
-                  href={`/episodes/${episode.id}`}
-                  className="card-link block min-h-11 rounded-2xl border border-line bg-bg-raised p-4"
-                >
-                  <p className="text-xs uppercase tracking-wider text-accent">{episode.show.title}</p>
-                  <p className="font-medium leading-snug">{episode.title}</p>
-                  <p className="mt-1 text-sm text-muted">{formatBriefDate(episode.publishedAt)}</p>
-                </Link>
+                <QueueCard
+                  episodeId={episode.id}
+                  showTitle={episode.show.title}
+                  title={episode.title}
+                  dateLabel={formatBriefDate(episode.publishedAt)}
+                  durationHint={durationHintForRecap({
+                    durationSeconds: episode.recapAudio?.durationSeconds,
+                    spokenRecap: episode.brief?.spokenRecap,
+                  })}
+                />
               </li>
             ))}
           </ul>

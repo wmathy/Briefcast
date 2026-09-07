@@ -7,6 +7,8 @@ describe("brief audio player", () => {
     const source = readFileSync(path.join(__dirname, "../components/AudioPlayer.tsx"), "utf8");
     expect(source).toContain('type="range"');
     expect(source).toContain("durationHint");
+    expect(source).toContain("episodeId");
+    expect(source).toContain("useRecapAudio");
     expect(source).toContain("formatPlayerTime");
     expect(source).not.toContain("Spoken recap · Eve");
     expect(source).not.toContain("controls");

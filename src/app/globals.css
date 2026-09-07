@@ -146,6 +146,14 @@ a {
   background: transparent;
 }
 
+.queue-play {
+  color: var(--ink);
+}
+
+.queue-play svg circle:last-of-type {
+  transition: stroke-dashoffset 160ms linear;
+}
+
 .grain {
   position: fixed;
   inset: 0;

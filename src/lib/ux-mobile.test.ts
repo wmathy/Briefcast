@@ -46,6 +46,8 @@ describe("mobile press and loading feedback", () => {
     expect(player).toContain("bg-bg-card");
     expect(player).toContain("border-ink/35");
     expect(player).not.toContain("hover:text-ink");
+    expect(read("../components/QueuePlayButton.tsx")).toContain("tap pressable");
+    expect(read("../components/QueuePlayButton.tsx")).toContain("h-11 w-11");
   });
 
   it("makes length and voice controls thumb-sized with busy state", () => {

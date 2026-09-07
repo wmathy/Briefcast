@@ -7,7 +7,8 @@ import { AudioPlayer } from "@/components/AudioPlayer";
 import { GenerateButton } from "@/components/GenerateButton";
 import { hasXaiKey } from "@/lib/env";
 import type { BriefSegment } from "@/lib/brief";
-import { estimateSpokenMinutesAt1x, formatBriefLengthShort, parseBriefLength } from "@/lib/brief-length";
+import { formatBriefLengthShort, parseBriefLength } from "@/lib/brief-length";
+import { durationHintForRecap } from "@/lib/recap-duration";
 import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,16 +39,20 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
 
   const durationHint =
     published && episode.recapAudio
-      ? episode.recapAudio.durationSeconds && episode.recapAudio.durationSeconds > 0
-        ? episode.recapAudio.durationSeconds
-        : episode.brief?.spokenRecap
-          ? Math.max(1, Math.round(estimateSpokenMinutesAt1x(episode.brief.spokenRecap) * 60))
-          : undefined
+      ? durationHintForRecap({
+          durationSeconds: episode.recapAudio.durationSeconds,
+          spokenRecap: episode.brief?.spokenRecap,
+        })
       : undefined;
 
   const player =
     published && episode.recapAudio ? (
-      <AudioPlayer src={`/api/audio/${episode.id}`} durationHint={durationHint} />
+      <AudioPlayer
+        key={episode.id}
+        src={`/api/audio/${episode.id}`}
+        episodeId={episode.id}
+        durationHint={durationHint}
+      />
     ) : null;
 
   return (

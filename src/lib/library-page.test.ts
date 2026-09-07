@@ -41,10 +41,23 @@ describe("library homepage queue", () => {
 
   it("stacks Library actions and uses pressable cards on small screens", () => {
     expect(source).toContain("flex-col gap-4 sm:flex-row");
-    expect(source).toContain("card-link");
     expect(source).toContain("tap pressable");
     expect(source).toContain("Find a podcast");
+    expect(source).toContain("QueueCard");
     expect(source).not.toContain("hover:border-accent");
+  });
+
+  it("puts an in-card recap play control on Ready queue rows only", () => {
+    expect(source).toContain("getFollowedBriefQueue");
+    expect(source).toContain("QueueCard");
+    expect(source).toContain("durationHintForRecap");
+    expect(source).toContain("AutoGenerateLatest");
+    expect(source).toContain("RefreshLibraryButton");
+    const card = readFileSync(path.join(__dirname, "../components/QueueCard.tsx"), "utf8");
+    expect(card).toContain("card-link");
+    expect(card).toContain("QueuePlayButton");
+    expect(card).toContain("items-center");
+    expect(card).toContain("font-medium leading-snug");
   });
 });
 
