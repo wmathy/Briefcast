@@ -5,6 +5,7 @@ import {
   listenProgressPercent,
   parseListenProgress,
   readListenProgress,
+  resetListenProgressCacheForTests,
   serializeListenProgress,
   upsertListenProgress,
   writeListenProgress,
@@ -65,6 +66,7 @@ describe("listen progress storage shape", () => {
 
 describe("listen progress localStorage helpers", () => {
   afterEach(() => {
+    resetListenProgressCacheForTests();
     if (typeof globalThis.localStorage !== "undefined") {
       globalThis.localStorage.removeItem(LISTEN_PROGRESS_STORAGE_KEY);
     }
@@ -92,8 +94,12 @@ describe("listen progress localStorage helpers", () => {
     });
 
     writeListenProgress("ep-9", 15, 300);
-    expect(readListenProgress("ep-9")).toMatchObject({ currentTime: 15, duration: 300 });
+    const first = readListenProgress("ep-9");
+    const second = readListenProgress("ep-9");
+    expect(first).toMatchObject({ currentTime: 15, duration: 300 });
+    expect(second).toBe(first);
     expect(readListenProgress("missing")).toBeNull();
+    expect(readListenProgress("missing")).toBe(readListenProgress("missing"));
     expect(memory.get(LISTEN_PROGRESS_STORAGE_KEY)).toContain('"v":1');
 
     delete (globalThis as { window?: unknown }).window;

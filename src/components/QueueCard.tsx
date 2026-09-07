@@ -15,7 +15,7 @@ export function QueueCard({
   durationHint?: number;
 }) {
   return (
-    <article className="card-link relative rounded-2xl border border-line bg-bg-raised p-4">
+    <article className="card-link relative isolate rounded-2xl border border-line bg-bg-raised p-4">
       <Link
         href={`/episodes/${episodeId}`}
         className="absolute inset-0 z-0 rounded-2xl"

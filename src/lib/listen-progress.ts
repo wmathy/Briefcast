@@ -89,14 +89,43 @@ function storage(): Storage | null {
   }
 }
 
-export function readListenProgress(episodeId: string): ListenProgressEntry | null {
+let cachedRaw: string | null = null;
+let cachedMap: ListenProgressMap = {};
+const cachedEntries = new Map<string, ListenProgressEntry | null>();
+
+function listenProgressMap(): ListenProgressMap {
   const store = storage();
-  if (!store || !episodeId) return null;
+  const raw = store?.getItem(LISTEN_PROGRESS_STORAGE_KEY) ?? null;
+  if (raw === cachedRaw) return cachedMap;
+  cachedRaw = raw;
+  cachedMap = parseListenProgress(raw);
+  cachedEntries.clear();
+  return cachedMap;
+}
+
+function sameEntry(a: ListenProgressEntry | null, b: ListenProgressEntry | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.currentTime === b.currentTime && a.duration === b.duration && a.updatedAt === b.updatedAt;
+}
+
+export function readListenProgress(episodeId: string): ListenProgressEntry | null {
+  if (!episodeId) return null;
   try {
-    return parseListenProgress(store.getItem(LISTEN_PROGRESS_STORAGE_KEY))[episodeId] ?? null;
+    const next = listenProgressMap()[episodeId] ?? null;
+    const prev = cachedEntries.get(episodeId) ?? null;
+    if (cachedEntries.has(episodeId) && sameEntry(prev, next)) return prev;
+    cachedEntries.set(episodeId, next);
+    return next;
   } catch {
     return null;
   }
+}
+
+export function resetListenProgressCacheForTests(): void {
+  cachedRaw = null;
+  cachedMap = {};
+  cachedEntries.clear();
 }
 
 export function writeListenProgress(episodeId: string, currentTime: number, duration: number): void {
@@ -110,6 +139,7 @@ export function writeListenProgress(episodeId: string, currentTime: number, dura
       duration,
     );
     store.setItem(LISTEN_PROGRESS_STORAGE_KEY, serializeListenProgress(next));
+    cachedRaw = null;
     window.dispatchEvent(new Event(LISTEN_PROGRESS_EVENT));
   } catch {
     // Quota or private-mode failures should not break playback.

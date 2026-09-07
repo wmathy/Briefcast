@@ -35,7 +35,7 @@ export function QueuePlayButton({
       aria-label={playing ? "Pause recap" : `Play recap, ${percent}% listened`}
       aria-pressed={playing}
       title={playing ? "Pause recap" : `Play recap · ${percent}% listened`}
-      className="queue-play tap pressable relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+      className="queue-play tap pressable relative z-10 flex h-11 w-11 shrink-0 items-center justify-center rounded-full pointer-events-auto"
     >
       <audio {...audioProps} />
       <svg
