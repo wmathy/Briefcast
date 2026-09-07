@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { loadEpisodeSource } from "./sources";
-import { SHOWNOTES_CONFIDENCE_NOTE } from "./transcripts";
+import { briefPromptSource, loadEpisodeSource } from "./sources";
 
 const originalFetch = globalThis.fetch;
+const originalKey = process.env.XAI_API_KEY;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  if (originalKey === undefined) delete process.env.XAI_API_KEY;
+  else process.env.XAI_API_KEY = originalKey;
 });
 
 function jsonResponse(data: unknown, status = 200) {
@@ -33,8 +35,8 @@ const notes = "Jesse Michels is the creator and host of American Alchemy, a YouT
 
 function longSpoken(seed: string): string {
   return Array.from(
-    { length: 24 },
-    (_, i) => `${seed} Additional spoken sentence ${i} about the conversation, the footage, and the labs.`,
+    { length: 80 },
+    (_, i) => `HOST: ${seed} Additional spoken sentence ${i} about the conversation, the footage, and the labs.`,
   ).join("\n");
 }
 
@@ -48,6 +50,7 @@ const nprTranscriptHtml = `<html><body class="no-transcript">
   <p>KENNY MALONE: I have never heard my Planet Money co-host this nervous before.</p>
   <p>ERIKA BERAS: OK. Can everyone in your car hear me?</p>
   <p>MALONE: No, this is just me. Today we pitch the board game to the buyers.</p>
+  ${Array.from({ length: 70 }, (_, i) => `<p>MALONE: Later we walk through buyer decision ${i} inside the big-box room.</p>`).join("")}
   </div>
   <footer>Support public media</footer>
 </body></html>`;
@@ -57,7 +60,7 @@ describe("loadEpisodeSource", () => {
     const calls = mockFetch((url) => {
       if (url === "https://example.com/episode.vtt") {
         return textResponse(
-          "00:00:01.000 --> 00:00:04.000\nHOST: Welcome to the official transcript of today's show. We stay with the published captions only.\n",
+          `00:00:01.000 --> 00:00:04.000\nHOST: Welcome to the official transcript of today's show. We stay with the published captions only.\n${longSpoken("We stay with the published captions only.")}`,
           200,
           "text/vtt",
         );
@@ -69,6 +72,7 @@ describe("loadEpisodeSource", () => {
       description: notes,
       transcriptUrl: "https://example.com/episode.vtt",
       episodeLink: "https://www.npr.org/2026/08/21/nx-s1-5940897/buyer-boardgame",
+      durationSeconds: 180,
       showTitle: "Planet Money",
       episodeTitle: "Who decides what big box sells?",
     });
@@ -92,6 +96,7 @@ describe("loadEpisodeSource", () => {
       description: "There is a room where the fates of retail products are decided.",
       transcriptUrl: null,
       episodeLink: "https://www.npr.org/2026/08/21/nx-s1-5940897/buyer-boardgame-bigbox-target-walmart",
+      durationSeconds: 180,
       showTitle: "Planet Money",
       episodeTitle: "Who decides what big box sells? Our GAME got us answers",
     });
@@ -102,7 +107,7 @@ describe("loadEpisodeSource", () => {
     expect(source.confidenceNote).toBeNull();
   });
 
-  it("falls back to show notes when the NPR transcripts page has no spoken text", async () => {
+  it("publishes nothing when the NPR transcripts page has no spoken text", async () => {
     mockFetch((url) => {
       if (url.includes("npr.org")) {
         return textResponse(
@@ -118,13 +123,12 @@ describe("loadEpisodeSource", () => {
     const source = await loadEpisodeSource({
       description: notes,
       episodeLink: "https://www.npr.org/2026/08/23/nx-s1-5940802/palmyra",
+      durationSeconds: 820,
       showTitle: "Up First from NPR",
       episodeTitle: "A visit to the remote Pacific island ecosystem losing protections",
     });
 
-    expect(source.sourceType).toBe("shownotes");
-    expect(source.text).toBe(notes);
-    expect(source.confidenceNote).toBe(SHOWNOTES_CONFIDENCE_NOTE);
+    expect(source).toBeNull();
   });
 
   it("uses public YouTube captions for a JRE-style episode with no RSS transcript", async () => {
@@ -149,6 +153,7 @@ describe("loadEpisodeSource", () => {
       description: notes,
       transcriptUrl: null,
       episodeLink: null,
+      durationSeconds: 180,
       showTitle: "The Joe Rogan Experience",
       episodeTitle: "#2545 - Jesse Michels",
     });
@@ -188,6 +193,7 @@ describe("loadEpisodeSource", () => {
 
     const source = await loadEpisodeSource({
       description: notes,
+      durationSeconds: 180,
       showTitle: "The Joe Rogan Experience",
       episodeTitle: "#2545 - Jesse Michels",
     });
@@ -195,6 +201,27 @@ describe("loadEpisodeSource", () => {
     expect(source.sourceType).toBe("transcript");
     expect(source.text).toContain("Welcome back onto the show");
     expect(source.confidenceNote).toBeNull();
+  });
+
+  it("skips YouTube discovery when a long episode already has audio for STT", async () => {
+    process.env.XAI_API_KEY = "test-key";
+    const calls = mockFetch((url) => {
+      if (url.includes("api.x.ai/v1/stt")) {
+        return jsonResponse({ text: spokenTranscript, duration: 180 });
+      }
+      return textResponse("should-not-fetch", 200);
+    });
+
+    await loadEpisodeSource({
+      description: `${notes}\nWatch: https://www.youtube.com/watch?v=33Fc_mLqY90`,
+      audioUrl: "https://example.com/jre.mp3",
+      durationSeconds: 189 * 60,
+      showTitle: "The Joe Rogan Experience",
+      episodeTitle: "#2545 - Jesse Michels",
+    });
+
+    expect(calls.some((url) => url.includes("youtube"))).toBe(false);
+    expect(calls.some((url) => url.includes("jre.mp3") || url.includes("api.x.ai"))).toBe(true);
   });
 
   it("uses a YouTube watch URL from the description without searching", async () => {
@@ -207,6 +234,7 @@ describe("loadEpisodeSource", () => {
 
     const source = await loadEpisodeSource({
       description: `${notes}\nWatch: https://www.youtube.com/watch?v=33Fc_mLqY90`,
+      durationSeconds: 180,
       showTitle: "The Joe Rogan Experience",
       episodeTitle: "#2545 - Jesse Michels",
     });
@@ -215,19 +243,81 @@ describe("loadEpisodeSource", () => {
     expect(source.text).toContain("Hi, Jesse");
   });
 
-  it("keeps the notes fallback and confidence note when no transcript can be fetched", async () => {
+  it("transcribes episode audio when published NPR pages have no spoken text", async () => {
+    process.env.XAI_API_KEY = "test-key";
+    const spoken = longSpoken("HOST: From the episode audio we later discuss stockpiles and the deadlock.");
+    const calls = mockFetch((url) => {
+      if (url.includes("api.x.ai/v1/stt")) {
+        return jsonResponse({ text: spoken, duration: 180 });
+      }
+      if (url.includes("npr.org")) {
+        return textResponse(
+          `<html><body class="no-transcript"><div aria-label="Transcript"><span>Transcript</span></div></body></html>`,
+          200,
+          "text/html",
+        );
+      }
+      return textResponse("missing", 404);
+    });
+
+    const source = await loadEpisodeSource({
+      description: notes,
+      episodeLink: "https://www.npr.org/2026/09/03/nx-s1-5955302/pentagon-exodus",
+      audioUrl: "https://example.com/up-first.mp3",
+      durationSeconds: 180,
+      showTitle: "Up First from NPR",
+      episodeTitle: "Pentagon Exodus",
+    });
+
+    expect(source.sourceType).toBe("transcript");
+    expect(source.confidenceNote).toBeNull();
+    expect(source.text).toContain("stockpiles");
+    expect(calls.some((url) => url.includes("api.x.ai/v1/stt"))).toBe(true);
+  });
+
+  it("slices a long transcript for the LLM prompt but keeps start, middle, and end", () => {
+    const text = `START-${"a".repeat(50_000)}-MID-${"b".repeat(50_000)}-END-${"c".repeat(50_000)}`;
+    const sliced = briefPromptSource(text, 90_000);
+    expect(sliced.length).toBeLessThan(text.length);
+    expect(sliced.length).toBeLessThanOrEqual(90_000 + 80);
+    expect(sliced.startsWith("START-")).toBe(true);
+    expect(sliced).toContain("[... middle of episode ...]");
+    expect(sliced).toContain("[... later in episode ...]");
+    expect(sliced.includes("END-") || sliced.endsWith("c".repeat(20))).toBe(true);
+    expect(sliced).toContain("c".repeat(100));
+  });
+
+  it("keeps a long official transcript instead of truncating at the old 80k cap", async () => {
+    const body = "HOST: Spoken line about later topics in the episode. ".repeat(4000);
+    expect(body.length).toBeGreaterThan(80_000);
+    mockFetch((url) => {
+      if (url === "https://example.com/full.txt") return textResponse(body);
+      return textResponse("missing", 404);
+    });
+
+    const source = await loadEpisodeSource({
+      description: notes,
+      transcriptUrl: "https://example.com/full.txt",
+      durationSeconds: 1800,
+    });
+
+    expect(source.sourceType).toBe("transcript");
+    expect(source.text.length).toBeGreaterThan(80_000);
+    expect(source.text).not.toContain("[Source truncated for length.]");
+  });
+
+  it("returns null when no complete transcript can be fetched", async () => {
     mockFetch(() => textResponse("missing", 404));
 
     const source = await loadEpisodeSource({
       description: notes,
       transcriptUrl: "https://example.com/missing.json",
       episodeLink: null,
+      durationSeconds: 820,
       showTitle: "A show without public captions",
       episodeTitle: "Tuesday news roundup",
     });
 
-    expect(source.sourceType).toBe("shownotes");
-    expect(source.text).toBe(notes);
-    expect(source.confidenceNote).toBe(SHOWNOTES_CONFIDENCE_NOTE);
+    expect(source).toBeNull();
   });
 });

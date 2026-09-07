@@ -25,15 +25,16 @@ describe("extractYoutubeVideoIds", () => {
 });
 
 describe("nprTranscriptUrls", () => {
-  it("builds a transcripts URL from a story permalink", () => {
+  it("builds transcripts and text.npr.org URLs from a story permalink", () => {
     expect(
       nprTranscriptUrls("https://www.npr.org/2026/08/21/nx-s1-5940897/buyer-boardgame-bigbox-target-walmart"),
-    ).toEqual(["https://www.npr.org/transcripts/nx-s1-5940897"]);
+    ).toEqual(["https://www.npr.org/transcripts/nx-s1-5940897", "https://text.npr.org/nx-s1-5940897"]);
   });
 
-  it("keeps an official transcripts permalink", () => {
+  it("keeps an official transcripts permalink and adds the text-only twin", () => {
     expect(nprTranscriptUrls("https://www.npr.org/transcripts/534736290")).toEqual([
       "https://www.npr.org/transcripts/534736290",
+      "https://text.npr.org/534736290",
     ]);
   });
 
@@ -115,6 +116,21 @@ describe("parseTranscriptPayload", () => {
     expect(text).toContain("KENNY MALONE:");
     expect(text).not.toContain("Donate to NPR");
     expect(text).not.toContain("aria-label");
+  });
+
+  it("extracts spoken dialogue from a text.npr.org article", () => {
+    const html = `<html><body>
+      <div class="paragraphs-container">
+        <p>Show notes teaser about the board game.</p>
+        <p>ANNOUNCER: This is Planet Money from NPR.</p>
+        <p>KENNY MALONE: I have never heard my co-host this nervous.</p>
+        <p>ERIKA BERAS: Can everyone in your car hear me?</p>
+        <p>MALONE: No, this is just me talking about the buyer board.</p>
+      </div>
+    </body></html>`;
+    const text = parseTranscriptPayload(html, "text/html", "https://text.npr.org/nx-s1-5940897");
+    expect(text).toContain("KENNY MALONE:");
+    expect(text).toContain("buyer board");
   });
 
   it("returns empty for an NPR transcripts page with no spoken text", () => {

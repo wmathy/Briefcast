@@ -12,7 +12,7 @@ export default async function ForgotPasswordPage() {
       <ForgotPasswordForm enabled={isRecoveryEnabled()} />
       <p className="text-sm text-muted">
         Remembered it?{" "}
-        <Link className="text-accent hover:underline" href="/login">
+        <Link className="tap pressable inline-flex items-center rounded-md text-accent underline" href="/login">
           Log in
         </Link>
       </p>

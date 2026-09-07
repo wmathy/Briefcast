@@ -2,12 +2,32 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import type { BriefLength } from "@/lib/brief-length";
+import {
+  FULL_TRANSCRIPT_UNAVAILABLE,
+  FULL_TRANSCRIPT_UNAVAILABLE_SHORT,
+} from "@/lib/transcript-complete";
 
-export function GenerateButton({ episodeId, hasXaiKey }: { episodeId: string; hasXaiKey: boolean }) {
+function displayError(message: string): string {
+  if (message === FULL_TRANSCRIPT_UNAVAILABLE || message.includes("Full transcript not available")) {
+    return FULL_TRANSCRIPT_UNAVAILABLE_SHORT;
+  }
+  return message;
+}
+
+export function GenerateButton({
+  episodeId,
+  hasXaiKey,
+  briefLength,
+  retryUnavailable,
+}: {
+  episodeId: string;
+  hasXaiKey: boolean;
+  briefLength?: BriefLength;
+  retryUnavailable?: boolean;
+}) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(
-    hasXaiKey ? null : "Add XAI_API_KEY to generate written briefs and spoken recaps.",
-  );
+  const [error, setError] = useState<string | null>(hasXaiKey ? null : "Add XAI_API_KEY.");
   const [pending, setPending] = useState(false);
 
   return (
@@ -15,21 +35,36 @@ export function GenerateButton({ episodeId, hasXaiKey }: { episodeId: string; ha
       <button
         type="button"
         disabled={pending}
+        aria-busy={pending}
         onClick={async () => {
           setPending(true);
           setError(null);
-          const response = await fetch(`/api/episodes/${episodeId}/generate`, { method: "POST" });
-          const data = (await response.json()) as { error?: string };
-          setPending(false);
-          if (!response.ok) {
-            setError(data.error ?? "Generate failed.");
-            return;
+          try {
+            const response = await fetch(`/api/episodes/${episodeId}/generate`, { method: "POST" });
+            const data = (await response.json().catch(() => ({}))) as {
+              error?: string;
+              message?: string;
+              published?: boolean;
+            };
+            if (!response.ok) {
+              setError(displayError(data.error ?? "Generate failed."));
+              return;
+            }
+            if (data.published === false) {
+              setError(displayError(data.message ?? data.error ?? FULL_TRANSCRIPT_UNAVAILABLE));
+              router.refresh();
+              return;
+            }
+            router.refresh();
+          } catch {
+            setError("Could not reach Briefcast. Try again.");
+          } finally {
+            setPending(false);
           }
-          router.refresh();
         }}
-        className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+        className="tap pressable rounded-full bg-accent px-4 text-sm font-medium text-bg disabled:opacity-60"
       >
-        {pending ? "Generating…" : "Generate brief + voice"}
+        {pending ? "Working…" : retryUnavailable ? "Retry" : briefLength ? "Rewrite" : "Generate"}
       </button>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
     </div>

@@ -5,6 +5,10 @@ import { getPrisma } from "@/lib/db";
 import { formatBriefDate } from "@/lib/brief";
 import { RefreshButton } from "@/components/RefreshButton";
 import { UnfollowButton } from "@/components/UnfollowButton";
+import { ShowBriefLengthControl } from "@/components/ShowBriefLengthControl";
+import { parseBriefLength } from "@/lib/brief-length";
+import { DEFAULT_TTS_VOICE, listTtsVoices, parseTtsVoice } from "@/lib/tts-voice";
+import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export const dynamic = "force-dynamic";
 
@@ -24,16 +28,17 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
   if (!show) notFound();
 
   const following = show.follows.length > 0;
+  const voices = following ? await listTtsVoices() : [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
         {show.artworkUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={show.artworkUrl} alt="" className="h-24 w-24 rounded-2xl object-cover" />
         ) : null}
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-4xl">{show.title}</h1>
+          <h1 className="font-display text-3xl leading-tight sm:text-4xl">{show.title}</h1>
           <p className="text-muted">{show.artist}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -42,31 +47,39 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
-      {!following ? (
-        <p className="text-sm text-muted">
-          You are not following this show. Search it from Discover if you want new episodes synced for you.
-        </p>
+      {following ? (
+        <ShowBriefLengthControl
+          showId={show.id}
+          initialLength={parseBriefLength(show.follows[0]?.briefLength)}
+          initialVoice={parseTtsVoice(show.follows[0]?.ttsVoice ?? DEFAULT_TTS_VOICE)}
+          voices={voices}
+        />
       ) : null}
 
-      <ul className="space-y-3">
-        {show.episodes.map((episode) => (
-          <li key={episode.id}>
-            <Link
-              href={`/episodes/${episode.id}`}
-              className="block rounded-2xl border border-line bg-bg-card p-4 hover:border-accent"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="font-medium">{episode.title}</h2>
-                <span className="text-xs text-muted">{formatBriefDate(episode.publishedAt)}</span>
-              </div>
-              <p className="mt-1 text-sm text-muted">
-                {episode.brief ? "Brief ready" : "No brief yet"}
-                {episode.recapAudio ? " · spoken recap" : ""}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <h2 className="text-xs uppercase tracking-[0.18em] text-muted">Episodes</h2>
+
+      {show.episodes.length === 0 ? (
+        <p className="text-sm text-muted">No episodes yet</p>
+      ) : (
+        <ul className="space-y-3">
+          {show.episodes.map((episode) => (
+            <li key={episode.id}>
+              <Link
+                href={`/episodes/${episode.id}`}
+                className="card-link block min-h-11 rounded-2xl border border-line bg-bg-card p-4"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 className="font-medium">{episode.title}</h2>
+                  <span className="text-xs text-muted">{formatBriefDate(episode.publishedAt)}</span>
+                </div>
+                <p className="mt-1 text-sm text-muted">
+                  {isPublishedTranscriptBrief(episode.brief) ? "Ready" : FULL_TRANSCRIPT_UNAVAILABLE_SHORT}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

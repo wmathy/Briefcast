@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { upsertShowFromItunes, syncShowEpisodes } from "@/lib/podcasts";
+import { requestOrigin, scheduleRefreshPipeline } from "@/lib/pipeline-hop";
+import { syncShowEpisodes, upsertShowFromItunes } from "@/lib/podcasts";
+import { parseBriefLength } from "@/lib/brief-length";
+
+export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const user = await getCurrentUser();
@@ -16,6 +20,7 @@ export async function POST(request: Request) {
     feedUrl?: string;
     artworkUrl?: string | null;
     description?: string;
+    briefLength?: string;
   };
 
   if (!body.itunesId || !body.title || !body.feedUrl) {
@@ -31,19 +36,40 @@ export async function POST(request: Request) {
     description: body.description ?? "",
   });
 
+  const briefLength = parseBriefLength(body.briefLength);
   const prisma = getPrisma();
   await prisma.follow.upsert({
     where: { userId_showId: { userId: user.id, showId: show.id } },
-    update: {},
-    create: { userId: user.id, showId: show.id },
+    update: { briefLength },
+    create: { userId: user.id, showId: show.id, briefLength },
   });
 
   try {
-    await syncShowEpisodes(show.id, show.feedUrl);
+    const sync = await syncShowEpisodes(show.id, show.feedUrl);
+    scheduleRefreshPipeline({
+      origin: requestOrigin(request),
+      hop: 0,
+      userId: user.id,
+      showId: show.id,
+      skipFeedSync: true,
+    });
+    return NextResponse.json({
+      showId: show.id,
+      briefLength,
+      fetched: sync.fetched,
+      created: sync.created,
+      remaining: 1,
+      progressed: true,
+      continuing: true,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
-    return NextResponse.json({ showId: show.id, warning: message });
+    scheduleRefreshPipeline({
+      origin: requestOrigin(request),
+      hop: 0,
+      userId: user.id,
+      showId: show.id,
+    });
+    return NextResponse.json({ showId: show.id, briefLength, continuing: true, warning: message });
   }
-
-  return NextResponse.json({ showId: show.id });
 }

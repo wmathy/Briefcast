@@ -2,9 +2,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import path from "node:path";
 
 export const AUTH_COOKIE = "briefcast_session";
-export const DEFAULT_PLAYBACK_RATE = 1.2;
-export const TTS_SPEED = 1.2;
-export const TTS_VOICE_ID = "eve";
+/** Synthesize at 1x so Short/Medium/Long duration bands are real, not faked by speed. */
+export const TTS_SPEED = 1;
 export const XAI_API_BASE = "https://api.x.ai/v1";
 export const XAI_CHAT_MODELS = ["grok-4.6", "grok-4", "grok-3-latest"] as const;
 

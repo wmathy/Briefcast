@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fraunces, IBM_Plex_Sans } from "next/font/google";
 import { getCurrentUser } from "@/lib/auth";
 import { Header } from "@/components/Header";
@@ -20,6 +20,13 @@ export const metadata: Metadata = {
   description: "Follow your own podcasts. Get a written brief and a spoken recap.",
 };
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#12110e",
+};
+
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const user = await getCurrentUser();
   return (
@@ -27,7 +34,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <div className="grain" />
         <Header user={user} />
-        <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:py-12">{children}</main>
+        <main className="mx-auto w-full max-w-5xl px-4 py-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:py-12">
+          {children}
+        </main>
       </body>
     </html>
   );

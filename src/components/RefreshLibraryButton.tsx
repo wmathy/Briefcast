@@ -1,0 +1,49 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
+
+export function RefreshLibraryButton() {
+  const router = useRouter();
+  const [label, setLabel] = useState("Check");
+  const [pending, setPending] = useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      aria-busy={pending}
+      onClick={async () => {
+        setPending(true);
+        try {
+          const response = await fetch("/api/queue/refresh", { method: "POST" });
+          const data = (await response.json().catch(() => ({}))) as RefreshResult;
+          if (!response.ok && response.status !== 202) {
+            setLabel(
+              response.status === 504 || response.status === 502
+                ? "Continuing…"
+                : (data.error ?? "Refresh failed"),
+            );
+            router.refresh();
+            return;
+          }
+          setLabel(data.continuing ? "Continuing…" : refreshStatusLabel(data));
+          router.refresh();
+          if (data.continuing || response.status === 202) {
+            window.setTimeout(() => setLabel("Check"), 2_000);
+          }
+        } catch {
+          setLabel("Continuing…");
+          router.refresh();
+          window.setTimeout(() => setLabel("Check"), 2_000);
+        } finally {
+          setPending(false);
+        }
+      }}
+      className="tap pressable rounded-full border border-line px-4 text-sm disabled:opacity-60"
+    >
+      {pending ? "Checking…" : label}
+    </button>
+  );
+}

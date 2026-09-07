@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { ItunesPodcast } from "@/lib/itunes";
+import { DEFAULT_BRIEF_LENGTH, type BriefLength } from "@/lib/brief-length";
+import { BriefLengthPicker } from "@/components/BriefLengthPicker";
 
 export function SearchShows() {
   const router = useRouter();
@@ -11,85 +13,121 @@ export function SearchShows() {
   const [error, setError] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [followingId, setFollowingId] = useState<string | null>(null);
+  const [defaultLength, setDefaultLength] = useState<BriefLength>(DEFAULT_BRIEF_LENGTH);
+  const [lengths, setLengths] = useState<Record<string, BriefLength>>({});
 
   async function search(event: FormEvent) {
     event.preventDefault();
     setSearching(true);
     setError(null);
-    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-    const data = (await response.json()) as { results?: ItunesPodcast[]; error?: string };
-    setSearching(false);
-    if (!response.ok) {
-      setError(data.error ?? "Search failed.");
-      return;
+    try {
+      const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data = (await response.json().catch(() => ({}))) as { results?: ItunesPodcast[]; error?: string };
+      if (!response.ok) {
+        setError(data.error ?? "Search failed.");
+        return;
+      }
+      setResults(data.results ?? []);
+    } catch {
+      setError("Could not reach Briefcast. Try again.");
+    } finally {
+      setSearching(false);
     }
-    setResults(data.results ?? []);
   }
 
   async function follow(podcast: ItunesPodcast) {
     setFollowingId(podcast.itunesId);
     setError(null);
-    const response = await fetch("/api/follows", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(podcast),
-    });
-    const data = (await response.json()) as { showId?: string; error?: string; warning?: string };
-    setFollowingId(null);
-    if (!response.ok || !data.showId) {
-      setError(data.error ?? "Could not follow that show.");
-      return;
+    try {
+      const response = await fetch("/api/follows", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...podcast,
+          briefLength: lengths[podcast.itunesId] ?? defaultLength,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        showId?: string;
+        error?: string;
+        warning?: string;
+        generated?: number;
+        fetched?: number;
+      };
+      if (!response.ok || !data.showId) {
+        setError(data.error ?? "Could not follow that show.");
+        return;
+      }
+      router.push(`/shows/${data.showId}`);
+      router.refresh();
+    } catch {
+      setError("Could not reach Briefcast. Try again.");
+    } finally {
+      setFollowingId(null);
     }
-    router.push(`/shows/${data.showId}`);
-    router.refresh();
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <form onSubmit={search} className="flex flex-col gap-3 sm:flex-row">
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search iTunes for a podcast you follow…"
-          className="min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 py-2.5 outline-none ring-accent focus:ring-2"
+          placeholder="Search podcasts"
+          className="min-h-11 min-w-0 flex-1 rounded-xl border border-line bg-bg px-3 outline-none ring-accent focus:ring-2"
         />
         <button
           type="submit"
           disabled={searching || !query.trim()}
-          className="rounded-full bg-accent px-5 py-2.5 font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+          aria-busy={searching}
+          className="tap pressable rounded-full bg-accent px-5 font-medium text-bg disabled:opacity-60"
         >
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
+      <BriefLengthPicker value={defaultLength} onChange={setDefaultLength} name="discover-default-length" />
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <ul className="space-y-3">
         {results.map((podcast) => (
           <li
             key={podcast.itunesId}
-            className="flex items-center gap-3 rounded-2xl border border-line bg-bg-card p-3"
+            className="flex flex-col gap-3 rounded-2xl border border-line bg-bg-card p-3 sm:flex-row sm:items-center"
           >
-            {podcast.artworkUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={podcast.artworkUrl}
-                alt=""
-                className="h-16 w-16 rounded-xl object-cover"
-              />
-            ) : (
-              <div className="h-16 w-16 rounded-xl bg-bg" />
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate font-medium">{podcast.title}</p>
-              <p className="truncate text-sm text-muted">{podcast.artist}</p>
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              {podcast.artworkUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={podcast.artworkUrl}
+                  alt=""
+                  className="h-16 w-16 rounded-xl object-cover"
+                />
+              ) : (
+                <div className="h-16 w-16 rounded-xl bg-bg" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{podcast.title}</p>
+                <p className="truncate text-sm text-muted">{podcast.artist}</p>
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={followingId === podcast.itunesId}
-              onClick={() => follow(podcast)}
-              className="shrink-0 rounded-full border border-line px-3 py-1.5 text-sm hover:border-accent"
-            >
-              {followingId === podcast.itunesId ? "Following…" : "Follow"}
-            </button>
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <BriefLengthPicker
+                value={lengths[podcast.itunesId] ?? defaultLength}
+                onChange={(value) =>
+                  setLengths((current) => ({ ...current, [podcast.itunesId]: value }))
+                }
+                disabled={followingId === podcast.itunesId}
+                name={`follow-length-${podcast.itunesId}`}
+              />
+              <button
+                type="button"
+                disabled={followingId === podcast.itunesId}
+                aria-busy={followingId === podcast.itunesId}
+                onClick={() => follow(podcast)}
+                className="tap pressable shrink-0 rounded-full border border-line px-3 text-sm"
+              >
+                {followingId === podcast.itunesId ? "Following…" : "Follow"}
+              </button>
+            </div>
           </li>
         ))}
       </ul>

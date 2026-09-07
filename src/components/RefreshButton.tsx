@@ -2,29 +2,46 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { refreshStatusLabel, type RefreshResult } from "@/lib/refresh-status";
 
 export function RefreshButton({ showId }: { showId: string }) {
   const router = useRouter();
-  const [label, setLabel] = useState("Check for new episodes");
+  const [label, setLabel] = useState("Check");
   const [pending, setPending] = useState(false);
 
   return (
     <button
       type="button"
       disabled={pending}
+      aria-busy={pending}
       onClick={async () => {
         setPending(true);
-        const response = await fetch(`/api/shows/${showId}/refresh`, { method: "POST" });
-        const data = (await response.json()) as { created?: number; error?: string };
-        setPending(false);
-        if (!response.ok) {
-          setLabel(data.error ?? "Refresh failed");
-          return;
+        try {
+          const response = await fetch(`/api/shows/${showId}/refresh`, { method: "POST" });
+          const data = (await response.json().catch(() => ({}))) as RefreshResult;
+          if (!response.ok && response.status !== 202) {
+            setLabel(
+              response.status === 504 || response.status === 502
+                ? "Continuing…"
+                : (data.error ?? "Refresh failed"),
+            );
+            router.refresh();
+            return;
+          }
+          setLabel(data.continuing ? "Continuing…" : refreshStatusLabel(data));
+          router.refresh();
+          if (data.continuing || response.status === 202) {
+            window.setTimeout(() => setLabel("Check"), 2_000);
+          }
+        } catch {
+          setLabel("Continuing…");
+          router.refresh();
+          window.setTimeout(() => setLabel("Check"), 2_000);
+        } finally {
+          setPending(false);
         }
-        setLabel(data.created ? `Added ${data.created} new` : "No new episodes");
-        router.refresh();
       }}
-      className="rounded-full border border-line px-4 py-2 text-sm hover:border-accent disabled:opacity-60"
+      className="tap pressable rounded-full border border-line px-4 text-sm disabled:opacity-60"
     >
       {pending ? "Checking…" : label}
     </button>

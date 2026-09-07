@@ -13,11 +13,7 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
 
   if (!enabled) {
     return (
-      <p className="rounded-2xl border border-line bg-bg-card p-4 text-sm leading-6 text-muted">
-        Password recovery is not enabled yet. Set <code className="text-ink">RECOVERY_SECRET</code>{" "}
-        on Vercel for Production and Preview, then Redeploy. After that, this page can reset an
-        existing account without sending email.
-      </p>
+      <p className="text-sm text-muted">Recovery isn’t enabled.</p>
     );
   }
 
@@ -43,10 +39,6 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
         router.refresh();
       }}
     >
-      <p className="text-sm leading-6 text-muted">
-        Enter the account email, a new password, and the recovery secret from your Vercel env.
-        Briefcast does not send reset mail.
-      </p>
       <label className="block space-y-1.5">
         <span className="text-sm text-muted">Email</span>
         <input
@@ -55,7 +47,7 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+          className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-ink outline-none ring-accent focus:ring-2"
         />
       </label>
       <label className="block space-y-1.5">
@@ -67,7 +59,7 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
           minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+          className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-ink outline-none ring-accent focus:ring-2"
         />
       </label>
       <label className="block space-y-1.5">
@@ -78,14 +70,15 @@ export function ForgotPasswordForm({ enabled }: { enabled: boolean }) {
           required
           value={secret}
           onChange={(event) => setSecret(event.target.value)}
-          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+          className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-ink outline-none ring-accent focus:ring-2"
         />
       </label>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-full bg-accent py-2.5 font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+        aria-busy={pending}
+        className="tap pressable w-full rounded-full bg-accent font-medium text-bg disabled:opacity-60"
       >
         {pending ? "Working…" : "Set new password"}
       </button>

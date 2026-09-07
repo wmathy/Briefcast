@@ -17,19 +17,24 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         event.preventDefault();
         setPending(true);
         setError(null);
-        const response = await fetch(`/api/auth/${mode}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
-        const data = (await response.json()) as { error?: string };
-        setPending(false);
-        if (!response.ok) {
-          setError(data.error ?? "Something went wrong.");
-          return;
+        try {
+          const response = await fetch(`/api/auth/${mode}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+          const data = (await response.json().catch(() => ({}))) as { error?: string };
+          if (!response.ok) {
+            setError(data.error ?? "Something went wrong.");
+            return;
+          }
+          router.push("/library");
+          router.refresh();
+        } catch {
+          setError("Could not reach Briefcast. Try again.");
+        } finally {
+          setPending(false);
         }
-        router.push("/library");
-        router.refresh();
       }}
     >
       <label className="block space-y-1.5">
@@ -40,7 +45,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           required
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+          className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-ink outline-none ring-accent focus:ring-2"
         />
       </label>
       <label className="block space-y-1.5">
@@ -52,14 +57,15 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           minLength={8}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
-          className="w-full rounded-xl border border-line bg-bg px-3 py-2.5 text-ink outline-none ring-accent focus:ring-2"
+          className="min-h-11 w-full rounded-xl border border-line bg-bg px-3 text-ink outline-none ring-accent focus:ring-2"
         />
       </label>
       {error ? <p className="text-sm text-danger">{error}</p> : null}
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-full bg-accent py-2.5 font-medium text-bg hover:bg-accent-deep disabled:opacity-60"
+        aria-busy={pending}
+        className="tap pressable w-full rounded-full bg-accent font-medium text-bg disabled:opacity-60"
       >
         {pending ? "Working…" : mode === "signup" ? "Create account" : "Log in"}
       </button>
