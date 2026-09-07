@@ -11,11 +11,14 @@ export type WindowedBriefWork = {
   publishedAt: Date;
   kind: AutoBriefKind;
   hasSource: boolean;
+  hasAudioUrl: boolean;
   hasTranscriptUrl: boolean;
   durationSeconds: number | null;
   sttStatus: string | null;
   sttUpdatedAt: Date | null;
   sttLockedAt: Date | null;
+  title: string;
+  showTitle: string;
 };
 
 export function isPublishedReadyBrief(episode: {
@@ -48,16 +51,20 @@ async function latestFollowedWork(input: {
   const row = await prisma.episode.findFirst({
     where: { showId: input.showId },
     orderBy: { publishedAt: "desc" },
-    include: { brief: true, recapAudio: true, sttJob: true },
+    include: { brief: true, recapAudio: true, sttJob: true, show: true },
   });
   if (!row) return null;
+  const hasAudioUrl = Boolean(row.audioUrl);
   const hasSource = Boolean(row.audioUrl || row.transcriptUrl);
   const extra = {
+    hasAudioUrl,
     hasTranscriptUrl: Boolean(row.transcriptUrl),
     durationSeconds: row.durationSeconds ?? null,
     sttStatus: row.sttJob?.status ?? null,
     sttUpdatedAt: row.sttJob?.updatedAt ?? null,
     sttLockedAt: row.sttJob?.lockedAt ?? null,
+    title: row.title,
+    showTitle: row.show?.title ?? "",
   };
   if (!isPublishedReadyBrief(row)) {
     return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed", hasSource, ...extra };
@@ -115,8 +122,10 @@ export async function collectWindowedFollowedWork(input: {
 export async function collectWindowedAutoBriefIds(input: {
   userId?: string;
   showId?: string;
+  excludeIds?: string[];
 }): Promise<string[]> {
-  const items = await collectWindowedFollowedWork(input);
+  const exclude = new Set(input.excludeIds ?? []);
+  const items = (await collectWindowedFollowedWork(input)).filter((item) => !exclude.has(item.id));
   const finishable = pickFinishableNewest(items);
   if (finishable.length > 0) return finishable;
   const ordered = orderAutoBriefQueue(items);

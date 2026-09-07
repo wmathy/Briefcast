@@ -18,12 +18,13 @@ export type PipelineHopResult = {
 
 export function pipelineShouldHop(result: PipelineHopResult): boolean {
   if (result.reason === "missing-xai-key") return false;
-  if (result.reason === "no-full-transcript" && !result.progressed && !result.skippedBusy) return false;
   const remaining = result.remaining ?? 0;
   if (remaining <= 0) return false;
   if (result.progressed) return true;
   if (result.skippedBusy) return true;
   if ((result.generated ?? 0) > 0) return true;
+  // Another follow’s newest is still queued after this one had no usable transcript.
+  if (result.reason === "no-full-transcript") return true;
   if (result.errors && result.errors.length > 0) return true;
   return false;
 }

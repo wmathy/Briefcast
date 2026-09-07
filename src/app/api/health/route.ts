@@ -28,7 +28,10 @@ export async function GET() {
     let newestNeeding: Array<{
       id: string;
       kind: string;
+      showTitle: string;
+      title: string;
       hasSource: boolean;
+      hasAudioUrl: boolean;
       hasTranscriptUrl: boolean;
       durationSeconds: number | null;
       sttStatus: string | null;
@@ -37,7 +40,10 @@ export async function GET() {
       newestNeeding = (await collectWindowedFollowedWork({})).map((item) => ({
         id: item.id,
         kind: item.kind,
+        showTitle: item.showTitle,
+        title: item.title,
         hasSource: item.hasSource,
+        hasAudioUrl: item.hasAudioUrl,
         hasTranscriptUrl: item.hasTranscriptUrl,
         durationSeconds: item.durationSeconds,
         sttStatus: item.sttStatus,

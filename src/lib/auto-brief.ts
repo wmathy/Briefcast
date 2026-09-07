@@ -79,6 +79,7 @@ export async function generateAutoBriefs(
   let inProgress = 0;
   let skippedBusy = false;
   let progressed = false;
+  const unavailableIds: string[] = [];
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   let focusTitle: string | null = null;
   const errors: string[] = [];
@@ -133,6 +134,7 @@ export async function generateAutoBriefs(
       }
       skipped += 1;
       if (result.reason === "no-full-transcript") {
+        unavailableIds.push(id);
         errors.push(`${episode.show.title}: ${FULL_TRANSCRIPT_UNAVAILABLE}`);
         continue;
       }
@@ -151,6 +153,7 @@ export async function generateAutoBriefs(
     skippedBusy,
     progressed,
     focusTitle,
+    unavailableIds,
     errors,
     reason:
       progressReason ??
@@ -220,6 +223,7 @@ export async function refreshFollowedBriefs(options?: {
   const stillNeeded = await collectWindowedAutoBriefIds({
     userId: options?.userId,
     showId: options?.showId,
+    excludeIds: generation.unavailableIds,
   });
   return {
     ...poll,

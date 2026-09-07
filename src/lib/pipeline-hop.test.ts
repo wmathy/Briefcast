@@ -48,15 +48,26 @@ describe("pipelineShouldHop", () => {
     expect(pipelineShouldHop({ remaining: 0, progressed: true, generated: 1 })).toBe(false);
   });
 
-  it("does not hop-spin when the newest episode has no full transcript", () => {
+  it("does not hop-spin when the only remaining episode has no full transcript", () => {
     expect(
       pipelineShouldHop({
-        remaining: 1,
+        remaining: 0,
         progressed: false,
         errors: ["The Tucker Carlson Show: Full transcript not available yet — no brief"],
         reason: "no-full-transcript",
       }),
     ).toBe(false);
+  });
+
+  it("hops to another follow after this newest had no usable transcript", () => {
+    expect(
+      pipelineShouldHop({
+        remaining: 1,
+        progressed: false,
+        errors: ["Jocko Podcast: Full transcript not available yet — no brief"],
+        reason: "no-full-transcript",
+      }),
+    ).toBe(true);
   });
 });
 

@@ -46,6 +46,7 @@ describe("brief window", () => {
             publishedAt: now,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 10_800,
             sttStatus: "running",
             sttLockedAt: now - 60_000,
@@ -55,6 +56,7 @@ describe("brief window", () => {
             publishedAt: now - 86_400_000,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 3_600,
           },
         ],
@@ -70,6 +72,7 @@ describe("brief window", () => {
             publishedAt: now,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 10_800,
           },
           {
@@ -77,6 +80,7 @@ describe("brief window", () => {
             publishedAt: now - 1_000,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             hasTranscriptUrl: true,
             durationSeconds: 2_400,
           },
@@ -93,6 +97,7 @@ describe("brief window", () => {
             publishedAt: now,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 10_800,
           },
           {
@@ -100,6 +105,7 @@ describe("brief window", () => {
             publishedAt: now - 1_000,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 2_400,
           },
         ],
@@ -118,6 +124,7 @@ describe("brief window", () => {
             publishedAt: now,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 10_800,
             sttStatus: "running",
             sttUpdatedAt: now - 7 * 60 * 60 * 1000,
@@ -128,7 +135,36 @@ describe("brief window", () => {
             publishedAt: now - 1_000,
             kind: "unbriefed",
             hasSource: true,
+            hasAudioUrl: true,
             durationSeconds: 3_600,
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["candace-newest"]);
+  });
+
+  it("does not prefer a notes-only transcript URL over another follow’s audio", () => {
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jocko-newest",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            hasAudioUrl: false,
+            hasTranscriptUrl: true,
+            durationSeconds: 1_245,
+          },
+          {
+            id: "candace-newest",
+            publishedAt: now - 1_000,
+            kind: "unbriefed",
+            hasSource: true,
+            hasAudioUrl: true,
+            durationSeconds: 3_675,
           },
         ],
         now,

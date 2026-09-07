@@ -10,6 +10,7 @@ export type FinishableWork = {
   publishedAt: Date | number;
   kind: "unbriefed" | "rewrite";
   hasSource?: boolean;
+  hasAudioUrl?: boolean;
   hasTranscriptUrl?: boolean;
   durationSeconds?: number | null;
   sttStatus?: string | null;
@@ -71,14 +72,14 @@ export function pickFinishableNewest(items: FinishableWork[], now = Date.now()):
     (item) => !(item.sttStatus === "running" && sttLockIsFresh(item.sttLockedAt, now)),
   );
 
-  const withTranscript = available.filter((item) => item.hasTranscriptUrl);
+  const withAudio = available.filter((item) => item.hasAudioUrl);
+  const withTranscript = withAudio.filter((item) => item.hasTranscriptUrl);
   if (withTranscript.length > 0) {
     return takeSingleNewestWork(newestFirst(withTranscript));
   }
 
-  const progressing = available.filter(
+  const progressing = withAudio.filter(
     (item) =>
-      item.hasSource &&
       item.sttUpdatedAt &&
       item.sttStatus !== "failed" &&
       !sttIsStalled(item.sttUpdatedAt, now),
@@ -87,7 +88,7 @@ export function pickFinishableNewest(items: FinishableWork[], now = Date.now()):
     return takeSingleNewestWork(newestFirst(progressing));
   }
 
-  const startable = available.filter((item) => item.hasSource && !sttIsStalled(item.sttUpdatedAt, now));
+  const startable = withAudio.filter((item) => !sttIsStalled(item.sttUpdatedAt, now));
   if (startable.length > 0) {
     const shortest = [...startable].sort((a, b) => {
       const durationA = a.durationSeconds && a.durationSeconds > 0 ? a.durationSeconds : Number.MAX_SAFE_INTEGER;
@@ -98,9 +99,14 @@ export function pickFinishableNewest(items: FinishableWork[], now = Date.now()):
     return shortest[0] ? [shortest[0].id] : [];
   }
 
-  const stalled = available.filter((item) => item.hasSource);
+  const stalled = withAudio;
   if (stalled.length > 0) {
     return takeSingleNewestWork(newestFirst(stalled));
+  }
+
+  const transcriptOnly = available.filter((item) => item.hasTranscriptUrl);
+  if (transcriptOnly.length > 0) {
+    return takeSingleNewestWork(newestFirst(transcriptOnly));
   }
 
   if (rewrite.length > 0) {

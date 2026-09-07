@@ -30,9 +30,13 @@ export function RefreshButton({ showId }: { showId: string }) {
           }
           setLabel(data.continuing ? "Continuing…" : refreshStatusLabel(data));
           router.refresh();
+          if (data.continuing || response.status === 202) {
+            window.setTimeout(() => setLabel("Check"), 2_000);
+          }
         } catch {
           setLabel("Continuing…");
           router.refresh();
+          window.setTimeout(() => setLabel("Check"), 2_000);
         } finally {
           setPending(false);
         }
