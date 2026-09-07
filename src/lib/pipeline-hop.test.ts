@@ -32,6 +32,17 @@ describe("pipelineShouldHop", () => {
     ).toBe(false);
   });
 
+  it("hops after skipping a busy STT lock so another follow’s newest can start", () => {
+    expect(
+      pipelineShouldHop({
+        remaining: 1,
+        progressed: false,
+        skippedBusy: true,
+        reason: "transcript-in-progress",
+      }),
+    ).toBe(true);
+  });
+
   it("stops when the key is missing or the window is empty", () => {
     expect(pipelineShouldHop({ remaining: 2, progressed: true, reason: "missing-xai-key" })).toBe(false);
     expect(pipelineShouldHop({ remaining: 0, progressed: true, generated: 1 })).toBe(false);

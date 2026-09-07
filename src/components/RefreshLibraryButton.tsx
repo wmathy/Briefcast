@@ -19,7 +19,7 @@ export function RefreshLibraryButton() {
         try {
           const response = await fetch("/api/queue/refresh", { method: "POST" });
           const data = (await response.json().catch(() => ({}))) as RefreshResult;
-          if (!response.ok) {
+          if (!response.ok && response.status !== 202) {
             setLabel(
               response.status === 504 || response.status === 502
                 ? "Continuing…"
@@ -28,7 +28,7 @@ export function RefreshLibraryButton() {
             router.refresh();
             return;
           }
-          setLabel(refreshStatusLabel(data));
+          setLabel(data.continuing ? "Continuing…" : refreshStatusLabel(data));
           router.refresh();
         } catch {
           setLabel("Continuing…");

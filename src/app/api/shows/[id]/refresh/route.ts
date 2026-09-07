@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import { hasXaiKey } from "@/lib/env";
-import { requestOrigin, schedulePipelineHopIfNeeded } from "@/lib/pipeline-hop";
+import { requestOrigin, scheduleRefreshPipeline } from "@/lib/pipeline-hop";
 
 export const maxDuration = 300;
 
@@ -25,29 +24,20 @@ export async function POST(
     return NextResponse.json({ error: "Follow this show to check for episodes." }, { status: 403 });
   }
 
-  try {
-    const result = await refreshFollowedBriefs({ userId: user.id, showId: id });
-    const continuing = schedulePipelineHopIfNeeded(result, {
-      origin: requestOrigin(request),
-      hop: 0,
-      userId: user.id,
-      showId: id,
-    });
-    return NextResponse.json({
-      fetched: result.fetched,
-      created: result.created,
-      generating: result.generating,
-      generated: result.generated,
-      remaining: result.remaining,
-      skipped: result.skipped,
-      progressed: result.progressed,
-      continuing,
+  scheduleRefreshPipeline({
+    origin: requestOrigin(request),
+    hop: 0,
+    userId: user.id,
+    showId: id,
+  });
+
+  return NextResponse.json(
+    {
+      continuing: true,
+      remaining: 1,
+      progressed: true,
       canGenerate: hasXaiKey(),
-      reason: result.reason,
-      errors: result.errors,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "RSS refresh failed.";
-    return NextResponse.json({ error: message }, { status: 502 });
-  }
+    },
+    { status: 202 },
+  );
 }

@@ -2,16 +2,49 @@ import { NextResponse } from "next/server";
 import { findBundledSeed } from "@/lib/db";
 import { getPrisma } from "@/lib/db";
 import { databaseProvider, hasXaiKey } from "@/lib/env";
+import { collectWindowedFollowedWork } from "@/lib/queue";
 
 export async function GET() {
   const provider = databaseProvider();
   try {
     const prisma = getPrisma();
-    const [shows, episodes, briefs] = await Promise.all([
+    const [shows, episodes, briefs, follows, users, followRows, sttRows] = await Promise.all([
       prisma.show.count(),
       prisma.episode.count(),
       prisma.brief.count(),
+      prisma.follow.count(),
+      prisma.user.count(),
+      prisma.follow.findMany({ select: { userId: true } }),
+      prisma.sttJob.findMany({ select: { status: true } }),
     ]);
+    const followTally = new Map<string, number>();
+    for (const row of followRows) {
+      followTally.set(row.userId, (followTally.get(row.userId) ?? 0) + 1);
+    }
+    const stt: Record<string, number> = {};
+    for (const row of sttRows) {
+      stt[row.status] = (stt[row.status] ?? 0) + 1;
+    }
+    let newestNeeding: Array<{
+      id: string;
+      kind: string;
+      hasSource: boolean;
+      hasTranscriptUrl: boolean;
+      durationSeconds: number | null;
+      sttStatus: string | null;
+    }> = [];
+    try {
+      newestNeeding = (await collectWindowedFollowedWork({})).map((item) => ({
+        id: item.id,
+        kind: item.kind,
+        hasSource: item.hasSource,
+        hasTranscriptUrl: item.hasTranscriptUrl,
+        durationSeconds: item.durationSeconds,
+        sttStatus: item.sttStatus,
+      }));
+    } catch (error) {
+      console.error("[health] newest window failed", error instanceof Error ? error.message : error);
+    }
     return NextResponse.json({
       ok: true,
       hasXaiKey: hasXaiKey(),
@@ -21,6 +54,11 @@ export async function GET() {
       shows,
       episodes,
       briefs,
+      follows,
+      users,
+      followCounts: [...followTally.values()].sort((a, b) => b - a),
+      stt,
+      newestNeeding,
     });
   } catch (error) {
     return NextResponse.json(

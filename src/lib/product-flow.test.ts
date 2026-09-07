@@ -7,18 +7,28 @@ function read(rel: string) {
 }
 
 describe("automatic brief generation is one awaited pipeline", () => {
-  it("follow, refresh, and cron all await refreshFollowedBriefs", () => {
+  it("Check and Follow ACK immediately; cron still awaits one turn then hops", () => {
     for (const file of [
       "../app/api/follows/route.ts",
       "../app/api/queue/refresh/route.ts",
       "../app/api/shows/[id]/refresh/route.ts",
       "../app/api/cron/poll-episodes/route.ts",
     ]) {
-      const source = read(file);
-      expect(source).not.toContain("after(");
-      expect(source).toContain("refreshFollowedBriefs");
-      expect(source).toContain("schedulePipelineHopIfNeeded");
+      expect(read(file)).not.toContain("after(");
     }
+    expect(read("../app/api/queue/refresh/route.ts")).toContain("scheduleRefreshPipeline");
+    expect(read("../app/api/queue/refresh/route.ts")).toContain("status: 202");
+    expect(read("../app/api/follows/route.ts")).toContain("scheduleRefreshPipeline");
+    expect(read("../app/api/follows/route.ts")).toContain("syncShowEpisodes");
+    expect(read("../app/api/shows/[id]/refresh/route.ts")).toContain("scheduleRefreshPipeline");
+    expect(read("../app/api/cron/poll-episodes/route.ts")).toContain("refreshFollowedBriefs");
+    expect(read("../app/api/cron/poll-episodes/route.ts")).toContain("schedulePipelineHopIfNeeded");
+    expect(read("./pipeline-hop.ts")).toContain("scheduleRefreshPipeline");
+    expect(read("./pipeline-hop.ts")).toContain("REFRESH_DEBOUNCE_MS");
+    expect(read("./pipeline-hop.ts")).toContain("after(");
+    expect(read("../components/RefreshLibraryButton.tsx")).toContain("response.status !== 202");
+    expect(read("../app/api/health/route.ts")).toContain("followCounts");
+    expect(read("../app/api/health/route.ts")).toContain("newestNeeding");
   });
 
   it("chains remaining work through /api/pipeline/continue instead of waiting for Check", () => {
@@ -34,6 +44,8 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./queue.ts")).toContain("orderIdsByPublishedAt");
     expect(read("./queue.ts")).toContain("orderAutoBriefQueue");
     expect(read("./queue.ts")).toContain("takeSingleNewestWork");
+    expect(read("./queue.ts")).toContain("pickFinishableNewest");
+    expect(read("./queue-window.ts")).toContain("pickFinishableNewest");
     expect(read("./queue.ts")).toContain('kind: "unbriefed"');
     expect(read("./queue-window.ts")).toContain("AUTO_BRIEF_BACKFILL = 1");
     expect(read("./auto-brief.ts")).toContain("shouldAdvanceOlderEpisode");

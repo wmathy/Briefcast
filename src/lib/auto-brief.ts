@@ -77,6 +77,7 @@ export async function generateAutoBriefs(
   let generated = 0;
   let skipped = 0;
   let inProgress = 0;
+  let skippedBusy = false;
   let progressed = false;
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   let focusTitle: string | null = null;
@@ -107,6 +108,7 @@ export async function generateAutoBriefs(
       });
       if (result.reason === "transcript-in-progress" && "sttBusy" in result && result.sttBusy) {
         inProgress += 1;
+        skippedBusy = true;
         progressReason = "transcript-in-progress";
         if (
           !shouldAdvanceOlderEpisode({
@@ -146,6 +148,7 @@ export async function generateAutoBriefs(
     generated,
     skipped,
     inProgress,
+    skippedBusy,
     progressed,
     focusTitle,
     errors,

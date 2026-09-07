@@ -3,6 +3,7 @@ import {
   AUTO_BRIEF_BACKFILL,
   episodeIsInBriefWindow,
   followWindowStart,
+  pickFinishableNewest,
   takeSingleNewestWork,
 } from "./queue-window";
 import { recapNeedsRewrite } from "./queue";
@@ -33,6 +34,106 @@ describe("brief window", () => {
     ).toBe(true);
     expect(takeSingleNewestWork(["tucker-newest", "jre-2549"])).toEqual(["tucker-newest"]);
     expect(takeSingleNewestWork([])).toEqual([]);
+  });
+
+  it("skips a fresh STT lock and prefers a public transcript or shorter audio", () => {
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2549",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 10_800,
+            sttStatus: "running",
+            sttLockedAt: now - 60_000,
+          },
+          {
+            id: "tucker-newest",
+            publishedAt: now - 86_400_000,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 3_600,
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["tucker-newest"]);
+
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2549",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 10_800,
+          },
+          {
+            id: "candace-newest",
+            publishedAt: now - 1_000,
+            kind: "unbriefed",
+            hasSource: true,
+            hasTranscriptUrl: true,
+            durationSeconds: 2_400,
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["candace-newest"]);
+
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2549",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 10_800,
+          },
+          {
+            id: "tucker-newest",
+            publishedAt: now - 1_000,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 2_400,
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["tucker-newest"]);
+  });
+
+  it("rotates off stalled STT so a new follow is not blocked for days", () => {
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2549",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 10_800,
+            sttStatus: "running",
+            sttUpdatedAt: now - 7 * 60 * 60 * 1000,
+            sttLockedAt: now - 7 * 60 * 60 * 1000,
+          },
+          {
+            id: "candace-newest",
+            publishedAt: now - 1_000,
+            kind: "unbriefed",
+            hasSource: true,
+            durationSeconds: 3_600,
+          },
+        ],
+        now,
+      ),
+    ).toEqual(["candace-newest"]);
   });
 });
 

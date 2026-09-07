@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { getPrisma } from "@/lib/db";
-import { refreshFollowedBriefs } from "@/lib/auto-brief";
-import { requestOrigin, schedulePipelineHopIfNeeded } from "@/lib/pipeline-hop";
-import { upsertShowFromItunes } from "@/lib/podcasts";
+import { requestOrigin, scheduleRefreshPipeline } from "@/lib/pipeline-hop";
+import { syncShowEpisodes, upsertShowFromItunes } from "@/lib/podcasts";
 import { parseBriefLength } from "@/lib/brief-length";
 
 export const maxDuration = 300;
@@ -46,31 +45,31 @@ export async function POST(request: Request) {
   });
 
   try {
-    const result = await refreshFollowedBriefs({ userId: user.id, showId: show.id });
-    const continuing = schedulePipelineHopIfNeeded(result, {
+    const sync = await syncShowEpisodes(show.id, show.feedUrl);
+    scheduleRefreshPipeline({
+      origin: requestOrigin(request),
+      hop: 0,
+      userId: user.id,
+      showId: show.id,
+      skipFeedSync: true,
+    });
+    return NextResponse.json({
+      showId: show.id,
+      briefLength,
+      fetched: sync.fetched,
+      created: sync.created,
+      remaining: 1,
+      progressed: true,
+      continuing: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
+    scheduleRefreshPipeline({
       origin: requestOrigin(request),
       hop: 0,
       userId: user.id,
       showId: show.id,
     });
-    const warning =
-      result.reason === "missing-xai-key"
-        ? "Followed. Add XAI_API_KEY to write the latest brief automatically."
-        : result.errors[0];
-    return NextResponse.json({
-      showId: show.id,
-      briefLength,
-      fetched: result.fetched,
-      created: result.created,
-      generated: result.generated,
-      remaining: result.remaining,
-      progressed: result.progressed,
-      continuing,
-      errors: result.errors,
-      warning,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Followed, but episode sync failed.";
-    return NextResponse.json({ showId: show.id, briefLength, warning: message });
+    return NextResponse.json({ showId: show.id, briefLength, continuing: true, warning: message });
   }
 }

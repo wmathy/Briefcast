@@ -20,6 +20,9 @@ function withFocus(label: string, title?: string | null): string {
 }
 
 export function refreshStatusLabel(data: RefreshResult): string {
+  if (data.continuing && !data.generated && !data.reason) {
+    return "Continuing…";
+  }
   if (data.reason === "transcript-in-progress") {
     return withFocus("Transcribing…", data.focusTitle);
   }

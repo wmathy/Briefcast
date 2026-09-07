@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { orderAutoBriefQueue, type AutoBriefKind } from "@/lib/auto-brief-policy";
-import { takeSingleNewestWork } from "@/lib/queue-window";
+import { pickFinishableNewest, takeSingleNewestWork } from "@/lib/queue-window";
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
@@ -11,6 +11,11 @@ export type WindowedBriefWork = {
   publishedAt: Date;
   kind: AutoBriefKind;
   hasSource: boolean;
+  hasTranscriptUrl: boolean;
+  durationSeconds: number | null;
+  sttStatus: string | null;
+  sttUpdatedAt: Date | null;
+  sttLockedAt: Date | null;
 };
 
 export function isPublishedReadyBrief(episode: {
@@ -43,15 +48,22 @@ async function latestFollowedWork(input: {
   const row = await prisma.episode.findFirst({
     where: { showId: input.showId },
     orderBy: { publishedAt: "desc" },
-    include: { brief: true, recapAudio: true },
+    include: { brief: true, recapAudio: true, sttJob: true },
   });
   if (!row) return null;
   const hasSource = Boolean(row.audioUrl || row.transcriptUrl);
+  const extra = {
+    hasTranscriptUrl: Boolean(row.transcriptUrl),
+    durationSeconds: row.durationSeconds ?? null,
+    sttStatus: row.sttJob?.status ?? null,
+    sttUpdatedAt: row.sttJob?.updatedAt ?? null,
+    sttLockedAt: row.sttJob?.lockedAt ?? null,
+  };
   if (!isPublishedReadyBrief(row)) {
-    return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed", hasSource };
+    return { id: row.id, publishedAt: row.publishedAt, kind: "unbriefed", hasSource, ...extra };
   }
   if (recapNeedsRewrite(row, input.ttsVoice, input.briefLength)) {
-    return { id: row.id, publishedAt: row.publishedAt, kind: "rewrite", hasSource };
+    return { id: row.id, publishedAt: row.publishedAt, kind: "rewrite", hasSource, ...extra };
   }
   return null;
 }
@@ -105,6 +117,8 @@ export async function collectWindowedAutoBriefIds(input: {
   showId?: string;
 }): Promise<string[]> {
   const items = await collectWindowedFollowedWork(input);
+  const finishable = pickFinishableNewest(items);
+  if (finishable.length > 0) return finishable;
   const ordered = orderAutoBriefQueue(items);
   const withSource = orderAutoBriefQueue(items.filter((item) => item.hasSource));
   return takeSingleNewestWork(withSource.length > 0 ? withSource : ordered);

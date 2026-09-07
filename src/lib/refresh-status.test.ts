@@ -65,4 +65,12 @@ describe("refreshStatusLabel", () => {
   it("is honest when the xAI key is missing", () => {
     expect(refreshStatusLabel({ reason: "missing-xai-key", created: 3 })).toContain("XAI_API_KEY");
   });
+
+  it("treats an immediate Check ACK as Continuing… so the button does not stay Checking…", () => {
+    expect(refreshStatusLabel({ continuing: true, remaining: 1, progressed: true })).toBe("Continuing…");
+    expect(refreshShouldContinue(202, { continuing: true, remaining: 1, progressed: true })).toBe(true);
+    expect(refreshContinueDelayMs({ continuing: true, remaining: 1, progressed: true })).toBeGreaterThanOrEqual(
+      15_000,
+    );
+  });
 });
