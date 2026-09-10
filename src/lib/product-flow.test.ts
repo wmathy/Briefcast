@@ -63,6 +63,7 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./auto-brief.ts")).toContain("Keep collectWindowed order");
     expect(read("./generate.ts")).toContain("rewriteReason === \"voice\"");
     expect(read("./pipeline-hop.ts")).toContain("AUTH_SECRET");
+    expect(read("./pipeline-hop.ts")).toContain("VERCEL_AUTOMATION_BYPASS_SECRET");
     expect(read("./pipeline-hop.ts")).not.toContain("AbortSignal.timeout");
     expect(read("./wipe-briefs.ts")).toContain("recapAudio.deleteMany");
     expect(read("./wipe-briefs.ts")).toContain("lastBriefedEpisodeId: null");

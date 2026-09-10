@@ -49,8 +49,17 @@ export function pipelineHopSecret(): string | null {
 }
 
 export function pipelineHopHeaders(): HeadersInit {
+  const headers: Record<string, string> = {};
   const secret = pipelineHopSecret();
-  return secret ? { authorization: `Bearer ${secret}` } : {};
+  if (secret) headers.authorization = `Bearer ${secret}`;
+  // Preview Deployment Protection 401s server-to-server hops unless we send the
+  // automation bypass. Production leaves this unset and hops on the public URL.
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  if (bypass) {
+    headers["x-vercel-protection-bypass"] = bypass;
+    headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+  return headers;
 }
 
 export function isPipelineHopAuthorized(request: Request): boolean {
