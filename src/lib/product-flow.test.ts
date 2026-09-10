@@ -27,6 +27,7 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("./pipeline-hop.ts")).toContain("scheduleRefreshPipeline");
     expect(read("./pipeline-hop.ts")).toContain("runPipelineTurn");
     expect(read("./pipeline-hop.ts")).toContain("drainFollowedBriefs");
+    expect(read("./pipeline-hop.ts")).toContain("turn < PIPELINE_MAX_HOPS");
     expect(read("./pipeline-hop.ts")).not.toContain("void dispatchPipelineHop");
     expect(read("./pipeline-hop.ts")).toContain("REFRESH_DEBOUNCE_MS");
     expect(read("./pipeline-hop.ts")).toContain("after(");

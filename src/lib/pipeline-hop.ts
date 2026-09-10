@@ -149,7 +149,7 @@ export async function drainFollowedBriefs(input: {
   const { pipelineTurnHasBudget } = await import("@/lib/pipeline-turn");
   let result: PipelineHopResult = { remaining: 1 };
   let skipFeedSync = input.skipFeedSync;
-  for (let turn = 0; turn < 20; turn += 1) {
+  for (let turn = 0; turn < PIPELINE_MAX_HOPS; turn += 1) {
     if (turn > 0 && !pipelineTurnHasBudget()) break;
     result = await refreshFollowedBriefs({
       userId: input.userId,
