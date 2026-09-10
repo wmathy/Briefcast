@@ -92,6 +92,7 @@ describe("pipeline hop auth", () => {
   const originalCron = process.env.CRON_SECRET;
   const originalAuth = process.env.AUTH_SECRET;
   const originalVercel = process.env.VERCEL;
+  const originalBypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
   function restore() {
     if (originalCron === undefined) delete process.env.CRON_SECRET;
@@ -100,6 +101,8 @@ describe("pipeline hop auth", () => {
     else process.env.AUTH_SECRET = originalAuth;
     if (originalVercel === undefined) delete process.env.VERCEL;
     else process.env.VERCEL = originalVercel;
+    if (originalBypass === undefined) delete process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+    else process.env.VERCEL_AUTOMATION_BYPASS_SECRET = originalBypass;
   }
 
   it("uses AUTH_SECRET on Vercel when CRON_SECRET is unset so Preview hops are not 401", () => {
@@ -107,7 +110,7 @@ describe("pipeline hop auth", () => {
     process.env.AUTH_SECRET = "preview-auth";
     process.env.VERCEL = "1";
     expect(pipelineHopSecret()).toBe("preview-auth");
-    expect(pipelineHopHeaders()).toEqual({ authorization: "Bearer preview-auth" });
+    expect(pipelineHopHeaders()).toMatchObject({ authorization: "Bearer preview-auth" });
     expect(
       isPipelineHopAuthorized(
         new Request("http://localhost/api/pipeline/continue", {
@@ -116,6 +119,18 @@ describe("pipeline hop auth", () => {
       ),
     ).toBe(true);
     expect(isPipelineHopAuthorized(new Request("http://localhost/api/pipeline/continue"))).toBe(false);
+    restore();
+  });
+
+  it("sends the Vercel automation bypass so Preview protection does not 401 hops", () => {
+    delete process.env.CRON_SECRET;
+    process.env.AUTH_SECRET = "preview-auth";
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET = "bypass-secret";
+    expect(pipelineHopHeaders()).toEqual({
+      authorization: "Bearer preview-auth",
+      "x-vercel-protection-bypass": "bypass-secret",
+      "x-vercel-set-bypass-cookie": "true",
+    });
     restore();
   });
 });

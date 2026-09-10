@@ -31,7 +31,7 @@ Local `npm run dev` uses SQLite (`file:./prisma/dev.db`) unless you point `DATAB
 | `AUTH_SECRET` | Recommended | Signs the login cookie. A long random string is fine. |
 | `RECOVERY_SECRET` | For password recovery | Shared secret for `/forgot-password`. If unset, recovery is disabled. No email is sent. |
 | `DATABASE_URL` | Local: optional. **Vercel: required** | Local default is `file:./prisma/dev.db` (SQLite via Prisma). On Vercel set a hosted **Postgres** URL (Neon or any Postgres). SQLite under `/tmp` is not shared across serverless instances, so Follow would 404 on `/shows/[id]`. |
-| `CRON_SECRET` | Vercel cron | Vercel sets this for `/api/cron/poll-episodes` (daily RSS poll of followed shows) and `/api/pipeline/continue` hops. Local calls work without it. |
+| `CRON_SECRET` | Vercel cron | Vercel sets this for `/api/cron/poll-episodes` (daily RSS poll of followed shows) and `/api/pipeline/continue` hops. Set the same value as a GitHub Actions secret so the 15-minute wake can continue STT overnight. Local calls work without it. |
 
 TTS is **Grok Voice / xAI only**. Briefcast does not use edge-tts or any other synthesizer.
 
@@ -47,7 +47,7 @@ Chat briefs use `https://api.x.ai/v1/chat/completions` when the key is present. 
 
 ## Deploy on Vercel
 
-This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief write that recap in-request. Production cron wakes daily (`15 8 * * *` UTC; Hobby rejects weekday-only expressions), diffs each follow’s latest episode against the last-briefed ledger, and self-chains `/api/pipeline/continue` hops so STT + brief + TTS finish across many 300s invocations (Hobby plans cannot add extra crons). Vercel cron does not run on Preview — Check starts the same hop chain.
+This is a standard Next.js App Router app (`vercel.json` + `next build`). The build runs `prisma generate`, `prisma db push`, and the optional public-episode seed. Following a show, **Check for new episodes**, and opening Library when the latest episode still needs a brief start the same ACK-first hop chain. Production Vercel cron wakes daily (`15 8 * * *` UTC; Hobby allows only one cron and rejects weekday-only expressions). That request returns **202 immediately**, then `after()` runs RSS detect + one STT/brief/TTS turn with the full 300s budget and **awaits** the next `/api/pipeline/continue` 202 (no 8s abort). Hops stop a chunk early so leftover time can ACK the next hop. Hobby cannot add a second Vercel cron, so `.github/workflows/pipeline-continue.yml` hits the same poll path every 15 minutes when `CRON_SECRET` is set as a GitHub Actions secret. External cron-job.org can `GET /api/cron/poll-episodes` or `GET /api/pipeline/continue` with `Authorization: Bearer $CRON_SECRET`. Vercel cron does not run on Preview — Check starts the same hop chain.
 
 Preview redeploy note (no product change): Neon org upgraded to Launch so this branch can rebuild against `DATABASE_URL`.
 

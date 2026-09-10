@@ -4,6 +4,8 @@ import {
   episodeIsInBriefWindow,
   followWindowStart,
   pickFinishableNewest,
+  selectWindowedAutoBriefIds,
+  STT_STALL_MS,
   takeSingleNewestWork,
 } from "./queue-window";
 import { recapNeedsRewrite } from "./queue";
@@ -112,6 +114,76 @@ describe("brief window", () => {
         now,
       ),
     ).toEqual(["tucker-newest"]);
+  });
+
+  it("does not fall back to a freshly locked newest (that hop-spins the chain to death)", () => {
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    expect(
+      selectWindowedAutoBriefIds(
+        [
+          {
+            id: "jre-2550",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            hasAudioUrl: true,
+            durationSeconds: 8733,
+            sttStatus: "running",
+            sttLockedAt: now - 60_000,
+          },
+        ],
+        now,
+      ),
+    ).toEqual([]);
+  });
+
+  it("treats 45 minutes without STT progress as stalled, but not 10 minutes", () => {
+    expect(STT_STALL_MS).toBe(30 * 60 * 1000);
+    const now = Date.parse("2026-09-07T12:00:00.000Z");
+    const candace = {
+      id: "candace-newest",
+      publishedAt: now - 1_000,
+      kind: "unbriefed" as const,
+      hasSource: true,
+      hasAudioUrl: true,
+      durationSeconds: 3_600,
+    };
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2550",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            hasAudioUrl: true,
+            durationSeconds: 10_800,
+            sttStatus: "pending",
+            sttUpdatedAt: now - 10 * 60 * 1000,
+          },
+          candace,
+        ],
+        now,
+      ),
+    ).toEqual(["jre-2550"]);
+    expect(
+      pickFinishableNewest(
+        [
+          {
+            id: "jre-2550",
+            publishedAt: now,
+            kind: "unbriefed",
+            hasSource: true,
+            hasAudioUrl: true,
+            durationSeconds: 10_800,
+            sttStatus: "pending",
+            sttUpdatedAt: now - 45 * 60 * 1000,
+          },
+          candace,
+        ],
+        now,
+      ),
+    ).toEqual(["candace-newest"]);
   });
 
   it("rotates off stalled STT so a new follow is not blocked for days", () => {

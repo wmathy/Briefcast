@@ -72,8 +72,8 @@ export function refreshIsTransientStatus(status: number): boolean {
 }
 
 export function refreshShouldContinue(status: number, data: RefreshResult): boolean {
-  // Do not stop just because a hop was scheduled — Preview hops can 401 or die
-  // after() leftover time. Library keeps a backup loop.
+  // Do not stop just because a hop was scheduled — Preview hops can 401
+  // (protection) or die leftover after() time. Library keeps a backup loop.
   if (status === 401) return false;
   if (refreshIsTransientStatus(status)) return true;
   if (data.reason === "transcript-in-progress") return true;

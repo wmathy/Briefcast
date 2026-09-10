@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { isCronRequestAuthorized } from "@/lib/auto-brief-policy";
+import { runPipelineTurn } from "@/lib/pipeline-turn";
 
 /** One hop is one 300s step. A 3-hour STT + write + TTS fits in this cap. */
 export const PIPELINE_MAX_HOPS = 80;
@@ -48,8 +49,17 @@ export function pipelineHopSecret(): string | null {
 }
 
 export function pipelineHopHeaders(): HeadersInit {
+  const headers: Record<string, string> = {};
   const secret = pipelineHopSecret();
-  return secret ? { authorization: `Bearer ${secret}` } : {};
+  if (secret) headers.authorization = `Bearer ${secret}`;
+  // Preview Deployment Protection 401s server-to-server hops unless we send the
+  // automation bypass. Production leaves this unset and hops on the public URL.
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim();
+  if (bypass) {
+    headers["x-vercel-protection-bypass"] = bypass;
+    headers["x-vercel-set-bypass-cookie"] = "true";
+  }
+  return headers;
 }
 
 export function isPipelineHopAuthorized(request: Request): boolean {
@@ -105,9 +115,7 @@ export function schedulePipelineHop(input: {
     console.warn("[pipeline] hop cap reached", input.hop);
     return;
   }
-  after(() => {
-    void dispatchPipelineHop(input);
-  });
+  after(() => dispatchPipelineHop(input));
 }
 
 export function schedulePipelineHopIfNeeded(
@@ -131,10 +139,35 @@ function refreshDebounceKey(input: { userId?: string; showId?: string }): string
   return `${input.userId ?? "*"}:${input.showId ?? "*"}`;
 }
 
-/**
- * ACK the browser immediately, then run a refresh turn in `after()` and hop.
- * Waiting in the Check request is what made the button sit on Checking… for 300s.
- */
+/** Keep using this 300s isolate until the hop reserve, then await the next 202. */
+export async function drainFollowedBriefs(input: {
+  userId?: string;
+  showId?: string;
+  skipFeedSync?: boolean;
+}): Promise<PipelineHopResult> {
+  const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
+  const { pipelineTurnHasBudget } = await import("@/lib/pipeline-turn");
+  let result: PipelineHopResult = { remaining: 1 };
+  let skipFeedSync = input.skipFeedSync;
+  for (let turn = 0; turn < PIPELINE_MAX_HOPS; turn += 1) {
+    if (turn > 0 && !pipelineTurnHasBudget()) break;
+    result = await refreshFollowedBriefs({
+      userId: input.userId,
+      showId: input.showId,
+      skipFeedSync,
+    });
+    skipFeedSync = true;
+    console.info("[pipeline] drain turn", {
+      turn,
+      progressed: result.progressed,
+      remaining: result.remaining,
+      reason: result.reason,
+      generated: result.generated,
+    });
+    if (!pipelineShouldHop(result)) break;
+  }
+  return result;
+}
 export function scheduleRefreshPipeline(input: {
   origin: string;
   hop?: number;
@@ -150,33 +183,34 @@ export function scheduleRefreshPipeline(input: {
   refreshStartedAt.set(key, now);
 
   const hop = input.hop ?? 0;
-  after(async () => {
-    try {
-      const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
-      const result = await refreshFollowedBriefs({
-        userId: input.userId,
-        showId: input.showId,
-        skipFeedSync: input.skipFeedSync,
-      });
-      if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({
-          origin: input.origin,
-          hop: hop + 1,
+  after(() =>
+    runPipelineTurn(async () => {
+      try {
+        const result = await drainFollowedBriefs({
           userId: input.userId,
           showId: input.showId,
+          skipFeedSync: input.skipFeedSync,
         });
+        if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({
+            origin: input.origin,
+            hop: hop + 1,
+            userId: input.userId,
+            showId: input.showId,
+          });
+        }
+      } catch (error) {
+        console.error("[pipeline] refresh start failed", error instanceof Error ? error.message : error);
+        if (hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({
+            origin: input.origin,
+            hop: hop + 1,
+            userId: input.userId,
+            showId: input.showId,
+          });
+        }
       }
-    } catch (error) {
-      console.error("[pipeline] refresh start failed", error instanceof Error ? error.message : error);
-      if (hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({
-          origin: input.origin,
-          hop: hop + 1,
-          userId: input.userId,
-          showId: input.showId,
-        });
-      }
-    }
-  });
+    }),
+  );
   return true;
 }
