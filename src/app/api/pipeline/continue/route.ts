@@ -1,9 +1,9 @@
 import { after } from "next/server";
 import { NextResponse } from "next/server";
-import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import {
   PIPELINE_MAX_HOPS,
   dispatchPipelineHop,
+  drainFollowedBriefs,
   isPipelineHopAuthorized,
   pipelineShouldHop,
   requestOrigin,
@@ -36,17 +36,10 @@ export async function POST(request: Request) {
   after(() =>
     runPipelineTurn(async () => {
       try {
-        const result = await refreshFollowedBriefs({
+        const result = await drainFollowedBriefs({
           userId,
           showId,
           skipFeedSync: true,
-        });
-        console.info("[pipeline] continue turn", {
-          hop,
-          progressed: result.progressed,
-          remaining: result.remaining,
-          reason: result.reason,
-          generated: result.generated,
         });
         if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
           await dispatchPipelineHop({ origin, hop: hop + 1, userId, showId });

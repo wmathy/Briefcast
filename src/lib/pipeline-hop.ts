@@ -139,10 +139,35 @@ function refreshDebounceKey(input: { userId?: string; showId?: string }): string
   return `${input.userId ?? "*"}:${input.showId ?? "*"}`;
 }
 
-/**
- * ACK the browser immediately, then run a refresh turn in `after()` and hop.
- * Waiting in the Check request is what made the button sit on Checking… for 300s.
- */
+/** Keep using this 300s isolate until the hop reserve, then await the next 202. */
+export async function drainFollowedBriefs(input: {
+  userId?: string;
+  showId?: string;
+  skipFeedSync?: boolean;
+}): Promise<PipelineHopResult> {
+  const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
+  const { pipelineTurnHasBudget } = await import("@/lib/pipeline-turn");
+  let result: PipelineHopResult = { remaining: 1 };
+  let skipFeedSync = input.skipFeedSync;
+  for (let turn = 0; turn < 20; turn += 1) {
+    if (turn > 0 && !pipelineTurnHasBudget()) break;
+    result = await refreshFollowedBriefs({
+      userId: input.userId,
+      showId: input.showId,
+      skipFeedSync,
+    });
+    skipFeedSync = true;
+    console.info("[pipeline] drain turn", {
+      turn,
+      progressed: result.progressed,
+      remaining: result.remaining,
+      reason: result.reason,
+      generated: result.generated,
+    });
+    if (!pipelineShouldHop(result)) break;
+  }
+  return result;
+}
 export function scheduleRefreshPipeline(input: {
   origin: string;
   hop?: number;
@@ -161,18 +186,10 @@ export function scheduleRefreshPipeline(input: {
   after(() =>
     runPipelineTurn(async () => {
       try {
-        const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
-        const result = await refreshFollowedBriefs({
+        const result = await drainFollowedBriefs({
           userId: input.userId,
           showId: input.showId,
           skipFeedSync: input.skipFeedSync,
-        });
-        console.info("[pipeline] refresh turn", {
-          hop,
-          progressed: result.progressed,
-          remaining: result.remaining,
-          reason: result.reason,
-          generated: result.generated,
         });
         if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
           await dispatchPipelineHop({

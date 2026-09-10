@@ -26,6 +26,7 @@ describe("automatic brief generation is one awaited pipeline", () => {
     expect(read("../app/api/cron/poll-episodes/route.ts")).not.toContain("refreshFollowedBriefs");
     expect(read("./pipeline-hop.ts")).toContain("scheduleRefreshPipeline");
     expect(read("./pipeline-hop.ts")).toContain("runPipelineTurn");
+    expect(read("./pipeline-hop.ts")).toContain("drainFollowedBriefs");
     expect(read("./pipeline-hop.ts")).not.toContain("void dispatchPipelineHop");
     expect(read("./pipeline-hop.ts")).toContain("REFRESH_DEBOUNCE_MS");
     expect(read("./pipeline-hop.ts")).toContain("after(");
@@ -38,7 +39,7 @@ describe("automatic brief generation is one awaited pipeline", () => {
   it("chains remaining work through /api/pipeline/continue instead of waiting for Check", () => {
     const continueRoute = read("../app/api/pipeline/continue/route.ts");
     expect(continueRoute).toContain("skipFeedSync: true");
-    expect(continueRoute).toContain("refreshFollowedBriefs");
+    expect(continueRoute).toContain("drainFollowedBriefs");
     expect(continueRoute).toContain("dispatchPipelineHop");
     expect(continueRoute).toContain("runPipelineTurn");
     expect(continueRoute).toContain("export async function GET");
