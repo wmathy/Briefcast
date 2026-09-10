@@ -8,6 +8,7 @@ import {
   pipelineShouldHop,
   requestOrigin,
 } from "@/lib/pipeline-hop";
+import { runPipelineTurn } from "@/lib/pipeline-turn";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -32,23 +33,37 @@ export async function POST(request: Request) {
   const showId = url.searchParams.get("showId") ?? undefined;
   const origin = requestOrigin(request);
 
-  after(async () => {
-    try {
-      const result = await refreshFollowedBriefs({
-        userId,
-        showId,
-        skipFeedSync: true,
-      });
-      if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({ origin, hop: hop + 1, userId, showId });
+  after(() =>
+    runPipelineTurn(async () => {
+      try {
+        const result = await refreshFollowedBriefs({
+          userId,
+          showId,
+          skipFeedSync: true,
+        });
+        console.info("[pipeline] continue turn", {
+          hop,
+          progressed: result.progressed,
+          remaining: result.remaining,
+          reason: result.reason,
+          generated: result.generated,
+        });
+        if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({ origin, hop: hop + 1, userId, showId });
+        }
+      } catch (error) {
+        console.error("[pipeline] continue failed", error instanceof Error ? error.message : error);
+        if (hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({ origin, hop: hop + 1, userId, showId });
+        }
       }
-    } catch (error) {
-      console.error("[pipeline] continue failed", error instanceof Error ? error.message : error);
-      if (hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({ origin, hop: hop + 1, userId, showId });
-      }
-    }
-  });
+    }),
+  );
 
   return NextResponse.json({ ok: true, accepted: true, hop }, { status: 202 });
+}
+
+/** External cron-job.org / curl wakes often only GET. Same ACK + after() hop as POST. */
+export async function GET(request: Request) {
+  return POST(request);
 }

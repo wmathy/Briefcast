@@ -1,0 +1,38 @@
+# Hobby Vercel allows one daily cron. Long STT needs many 300s hops; if that
+# chain dies after the daily ACK, the next platform wake is tomorrow.
+# This repo wake hits the same ACK-first poll path every 15 minutes so new
+# followed episodes keep transcribing overnight without opening Library.
+#
+# Required: GitHub Actions secret CRON_SECRET = Vercel CRON_SECRET
+# Optional: repository variable BRIEFCAST_URL (defaults to production)
+name: Continue brief pipeline
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ACK-first poll + hop chain
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          BRIEFCAST_URL: ${{ vars.BRIEFCAST_URL }}
+        run: |
+          set -eu
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "Set repo secret CRON_SECRET to the Vercel production CRON_SECRET."
+            exit 1
+          fi
+          url="${BRIEFCAST_URL:-https://briefcast-beryl.vercel.app}"
+          echo "Waking ${url}/api/cron/poll-episodes"
+          code=$(curl -sS -o /tmp/wake.json -w "%{http_code}" \
+            -X GET "${url}/api/cron/poll-episodes" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Cache-Control: no-store")
+          echo "poll-episodes HTTP ${code}"
+          cat /tmp/wake.json
+          echo
+          test "${code}" = "202" || test "${code}" = "200"

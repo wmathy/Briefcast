@@ -1,5 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { STT_CHUNK_BYTES } from "@/lib/audio-chunks";
+import { pipelineTurnHasBudget } from "@/lib/pipeline-turn";
 import { fetchAudioSlice, sttBufferChunk, xaiSttFromAudioUrl, type SttResult } from "@/lib/xai";
 
 /** 2×2MB stays inside 300s with margin. 8MB single slices timed out; 3 chunks (~6MB) is too close. */
@@ -43,6 +44,55 @@ function lockIsFresh(job: JobRow): boolean {
   return Date.now() - job.lockedAt.getTime() < LOCK_STALE_MS;
 }
 
+function busyProgress(job: JobRow): TranscriptInProgressError {
+  return new TranscriptInProgressError({
+    chunks: job.chunkCount,
+    nextByte: job.nextByte,
+    totalBytes: job.totalBytes,
+    coveredSeconds: job.coveredSeconds,
+    busy: true,
+  });
+}
+
+/** Atomic claim so a GitHub wake + live hop cannot both write the same STT job. */
+async function claimSttJob(
+  episodeId: string,
+  audioUrl: string,
+  existing: JobRow | null,
+): Promise<JobRow> {
+  const prisma = getPrisma();
+  if (!existing) {
+    try {
+      return await prisma.sttJob.create({
+        data: {
+          episodeId,
+          audioUrl,
+          status: "running",
+          lockedAt: new Date(),
+        },
+      });
+    } catch {
+      const raced = await prisma.sttJob.findUnique({ where: { episodeId } });
+      if (raced && lockIsFresh(raced)) throw busyProgress(raced);
+    }
+  }
+
+  const staleBefore = new Date(Date.now() - LOCK_STALE_MS);
+  const claimed = await prisma.sttJob.updateMany({
+    where: {
+      episodeId,
+      OR: [{ status: { not: "running" } }, { lockedAt: null }, { lockedAt: { lt: staleBefore } }],
+    },
+    data: { status: "running", lockedAt: new Date(), error: null },
+  });
+  const job = await prisma.sttJob.findUnique({ where: { episodeId } });
+  if (!job || claimed.count === 0) {
+    if (job && lockIsFresh(job)) throw busyProgress(job);
+    throw new Error("Could not claim STT job.");
+  }
+  return job;
+}
+
 export async function transcribeEpisodeDurable(input: {
   episodeId: string;
   audioUrl: string;
@@ -71,21 +121,7 @@ export async function transcribeEpisodeDurable(input: {
     });
   }
 
-  if (!job) {
-    job = await prisma.sttJob.create({
-      data: {
-        episodeId: input.episodeId,
-        audioUrl: input.audioUrl,
-        status: "running",
-        lockedAt: new Date(),
-      },
-    });
-  } else {
-    job = await prisma.sttJob.update({
-      where: { episodeId: input.episodeId },
-      data: { status: "running", lockedAt: new Date(), error: null },
-    });
-  }
+  job = await claimSttJob(input.episodeId, input.audioUrl, job);
 
   try {
     const next = await advanceJob(job, input.keyterms, input.durationSeconds);
@@ -117,6 +153,17 @@ async function advanceJob(
   let current = job;
 
   for (let turn = 0; turn < STT_CHUNKS_PER_TURN; turn += 1) {
+    if (turn > 0 && !pipelineTurnHasBudget()) {
+      console.info("[stt] reserve hop time", {
+        episodeId: current.episodeId,
+        chunks: current.chunkCount,
+        nextByte: current.nextByte,
+      });
+      return prisma.sttJob.update({
+        where: { episodeId: current.episodeId },
+        data: { status: "pending", lockedAt: null },
+      });
+    }
     if (current.totalBytes != null && current.nextByte >= current.totalBytes && current.text.length > 80) {
       return prisma.sttJob.update({
         where: { episodeId: current.episodeId },

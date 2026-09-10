@@ -35,6 +35,11 @@ export async function GET() {
       hasTranscriptUrl: boolean;
       durationSeconds: number | null;
       sttStatus: string | null;
+      sttChunks: number | null;
+      sttNextByte: number | null;
+      sttTotalBytes: number | null;
+      sttCoveredSeconds: number | null;
+      sttUpdatedAt: string | null;
     }> = [];
     try {
       newestNeeding = (await collectWindowedFollowedWork({})).map((item) => ({
@@ -47,6 +52,11 @@ export async function GET() {
         hasTranscriptUrl: item.hasTranscriptUrl,
         durationSeconds: item.durationSeconds,
         sttStatus: item.sttStatus,
+        sttChunks: item.sttChunkCount,
+        sttNextByte: item.sttNextByte,
+        sttTotalBytes: item.sttTotalBytes,
+        sttCoveredSeconds: item.sttCoveredSeconds,
+        sttUpdatedAt: item.sttUpdatedAt ? item.sttUpdatedAt.toISOString() : null,
       }));
     } catch (error) {
       console.error("[health] newest window failed", error instanceof Error ? error.message : error);

@@ -1,6 +1,6 @@
 import { getPrisma } from "@/lib/db";
 import { orderAutoBriefQueue, type AutoBriefKind } from "@/lib/auto-brief-policy";
-import { pickFinishableNewest, takeSingleNewestWork } from "@/lib/queue-window";
+import { selectWindowedAutoBriefIds } from "@/lib/queue-window";
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
@@ -17,6 +17,10 @@ export type WindowedBriefWork = {
   sttStatus: string | null;
   sttUpdatedAt: Date | null;
   sttLockedAt: Date | null;
+  sttChunkCount: number | null;
+  sttNextByte: number | null;
+  sttTotalBytes: number | null;
+  sttCoveredSeconds: number | null;
   title: string;
   showTitle: string;
 };
@@ -63,6 +67,10 @@ async function latestFollowedWork(input: {
     sttStatus: row.sttJob?.status ?? null,
     sttUpdatedAt: row.sttJob?.updatedAt ?? null,
     sttLockedAt: row.sttJob?.lockedAt ?? null,
+    sttChunkCount: row.sttJob?.chunkCount ?? null,
+    sttNextByte: row.sttJob?.nextByte ?? null,
+    sttTotalBytes: row.sttJob?.totalBytes ?? null,
+    sttCoveredSeconds: row.sttJob?.coveredSeconds ?? null,
     title: row.title,
     showTitle: row.show?.title ?? "",
   };
@@ -126,11 +134,7 @@ export async function collectWindowedAutoBriefIds(input: {
 }): Promise<string[]> {
   const exclude = new Set(input.excludeIds ?? []);
   const items = (await collectWindowedFollowedWork(input)).filter((item) => !exclude.has(item.id));
-  const finishable = pickFinishableNewest(items);
-  if (finishable.length > 0) return finishable;
-  const ordered = orderAutoBriefQueue(items);
-  const withSource = orderAutoBriefQueue(items.filter((item) => item.hasSource));
-  return takeSingleNewestWork(withSource.length > 0 ? withSource : ordered);
+  return selectWindowedAutoBriefIds(items);
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {

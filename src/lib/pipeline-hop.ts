@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { isCronRequestAuthorized } from "@/lib/auto-brief-policy";
+import { runPipelineTurn } from "@/lib/pipeline-turn";
 
 /** One hop is one 300s step. A 3-hour STT + write + TTS fits in this cap. */
 export const PIPELINE_MAX_HOPS = 80;
@@ -105,9 +106,7 @@ export function schedulePipelineHop(input: {
     console.warn("[pipeline] hop cap reached", input.hop);
     return;
   }
-  after(() => {
-    void dispatchPipelineHop(input);
-  });
+  after(() => dispatchPipelineHop(input));
 }
 
 export function schedulePipelineHopIfNeeded(
@@ -150,33 +149,42 @@ export function scheduleRefreshPipeline(input: {
   refreshStartedAt.set(key, now);
 
   const hop = input.hop ?? 0;
-  after(async () => {
-    try {
-      const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
-      const result = await refreshFollowedBriefs({
-        userId: input.userId,
-        showId: input.showId,
-        skipFeedSync: input.skipFeedSync,
-      });
-      if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({
-          origin: input.origin,
-          hop: hop + 1,
+  after(() =>
+    runPipelineTurn(async () => {
+      try {
+        const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
+        const result = await refreshFollowedBriefs({
           userId: input.userId,
           showId: input.showId,
+          skipFeedSync: input.skipFeedSync,
         });
-      }
-    } catch (error) {
-      console.error("[pipeline] refresh start failed", error instanceof Error ? error.message : error);
-      if (hop < PIPELINE_MAX_HOPS) {
-        await dispatchPipelineHop({
-          origin: input.origin,
-          hop: hop + 1,
-          userId: input.userId,
-          showId: input.showId,
+        console.info("[pipeline] refresh turn", {
+          hop,
+          progressed: result.progressed,
+          remaining: result.remaining,
+          reason: result.reason,
+          generated: result.generated,
         });
+        if (pipelineShouldHop(result) && hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({
+            origin: input.origin,
+            hop: hop + 1,
+            userId: input.userId,
+            showId: input.showId,
+          });
+        }
+      } catch (error) {
+        console.error("[pipeline] refresh start failed", error instanceof Error ? error.message : error);
+        if (hop < PIPELINE_MAX_HOPS) {
+          await dispatchPipelineHop({
+            origin: input.origin,
+            hop: hop + 1,
+            userId: input.userId,
+            showId: input.showId,
+          });
+        }
       }
-    }
-  });
+    }),
+  );
   return true;
 }
