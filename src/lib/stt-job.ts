@@ -121,10 +121,10 @@ export async function transcribeEpisodeDurable(input: {
     });
   }
 
-  job = await claimSttJob(input.episodeId, input.audioUrl, job);
+  const claimed = await claimSttJob(input.episodeId, input.audioUrl, job);
 
   try {
-    const next = await advanceJob(job, input.keyterms, input.durationSeconds);
+    const next = await advanceJob(claimed, input.keyterms, input.durationSeconds);
     // Even the last chunk returns in-progress so this 300s turn does not also
     // write the brief and run TTS. The next continue reads the completed job.
     throw new TranscriptInProgressError({
