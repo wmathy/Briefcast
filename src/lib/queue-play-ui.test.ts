@@ -46,7 +46,7 @@ describe("library queue play button", () => {
     expect(library).toContain("RefreshLibraryButton");
     expect(library).toContain("Find a podcast");
     expect(library).toContain("AutoGenerateLatest");
-    expect(library).toContain("countLatestFollowedNeedingBrief");
+    expect(library).toContain("loadFollowedBriefCounts");
     expect(library).toContain("FULL_TRANSCRIPT_UNAVAILABLE");
     expect(library).toContain("getFollowedBriefQueue");
     expect(read("./queue.ts")).toContain("recapAudio: { isNot: null }");

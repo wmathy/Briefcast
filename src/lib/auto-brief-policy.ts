@@ -27,10 +27,14 @@ export function orderAutoBriefQueue(
   return [...unbriefed, ...rewrite.filter((id) => !unbriefed.includes(id))];
 }
 
-export function isUnfinishedSttJob(job: { status: string; text?: string | null } | null | undefined): boolean {
+export function isUnfinishedSttJob(
+  job: { status: string; text?: string | null; textLength?: number | null } | null | undefined,
+): boolean {
   if (!job) return false;
   if (job.status === "failed") return false;
-  if (job.status === "complete" && (job.text?.length ?? 0) > 80) return false;
+  // Complete jobs store the transcript body. Callers may pass the string or
+  // only its length so queue scans do not transfer the text column.
+  if (job.status === "complete" && (job.textLength ?? job.text?.length ?? 0) > 80) return false;
   return true;
 }
 

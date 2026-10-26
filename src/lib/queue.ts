@@ -2,6 +2,7 @@ import { getPrisma } from "@/lib/db";
 import { orderAutoBriefQueue, type AutoBriefKind } from "@/lib/auto-brief-policy";
 import { selectWindowedAutoBriefIds } from "@/lib/queue-window";
 import { spokenRecapInBand, parseBriefLength, recapAudioInBand } from "@/lib/brief-length";
+import { recapAudioMetadataSelect, sttJobMetadataSelect } from "@/lib/prisma-select";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
 
 export { orderAutoBriefQueue, orderIdsByPublishedAt } from "@/lib/auto-brief-policy";
@@ -41,7 +42,11 @@ export async function getFollowedBriefQueue(userId: string) {
       recapAudio: { isNot: null },
       show: { follows: { some: { userId } } },
     },
-    include: { show: true, brief: true, recapAudio: true },
+    include: {
+      show: true,
+      brief: true,
+      recapAudio: { select: recapAudioMetadataSelect },
+    },
     orderBy: { publishedAt: "desc" },
   });
 }
@@ -55,7 +60,12 @@ async function latestFollowedWork(input: {
   const row = await prisma.episode.findFirst({
     where: { showId: input.showId },
     orderBy: { publishedAt: "desc" },
-    include: { brief: true, recapAudio: true, sttJob: true, show: true },
+    include: {
+      brief: true,
+      recapAudio: { select: recapAudioMetadataSelect },
+      sttJob: { select: sttJobMetadataSelect },
+      show: true,
+    },
   });
   if (!row) return null;
   const hasAudioUrl = Boolean(row.audioUrl);
@@ -83,13 +93,23 @@ async function latestFollowedWork(input: {
   return null;
 }
 
+/** One window scan shared by the Library waiting count and the auto-brief flag. */
+export async function loadFollowedBriefCounts(userId: string): Promise<{
+  unbriefed: number;
+  latestNeeding: number;
+}> {
+  const count = (await collectWindowedAutoBriefIds({ userId })).length;
+  return { unbriefed: count, latestNeeding: count };
+}
+
 export async function countUnbriefedFollowedEpisodes(userId: string) {
-  return (await collectWindowedAutoBriefIds({ userId })).length;
+  return (await loadFollowedBriefCounts(userId)).unbriefed;
 }
 
 export async function collectWindowedFollowedWork(input: {
   userId?: string;
   showId?: string;
+  excludeIds?: Iterable<string>;
 }): Promise<WindowedBriefWork[]> {
   const prisma = getPrisma();
   const follows = await prisma.follow.findMany({
@@ -115,6 +135,7 @@ export async function collectWindowedFollowedWork(input: {
     }
   }
 
+  const exclude = new Set(input.excludeIds ?? []);
   const items: WindowedBriefWork[] = [];
   for (const [showId, meta] of earliest) {
     const item = await latestFollowedWork({
@@ -122,7 +143,7 @@ export async function collectWindowedFollowedWork(input: {
       ttsVoice: meta.ttsVoice,
       briefLength: meta.briefLength,
     });
-    if (item) items.push(item);
+    if (item && !exclude.has(item.id)) items.push(item);
   }
   return items;
 }
@@ -130,15 +151,14 @@ export async function collectWindowedFollowedWork(input: {
 export async function collectWindowedAutoBriefIds(input: {
   userId?: string;
   showId?: string;
-  excludeIds?: string[];
+  excludeIds?: Iterable<string>;
 }): Promise<string[]> {
-  const exclude = new Set(input.excludeIds ?? []);
-  const items = (await collectWindowedFollowedWork(input)).filter((item) => !exclude.has(item.id));
+  const items = await collectWindowedFollowedWork(input);
   return selectWindowedAutoBriefIds(items);
 }
 
 export async function countLatestFollowedNeedingBrief(userId: string) {
-  return (await collectWindowedAutoBriefIds({ userId })).length;
+  return (await loadFollowedBriefCounts(userId)).latestNeeding;
 }
 
 export type RecapRewriteReason = "missing" | "voice" | "length" | null;

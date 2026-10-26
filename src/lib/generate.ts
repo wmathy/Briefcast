@@ -20,6 +20,7 @@ import {
 } from "@/lib/brief-length";
 import { mp3PlaybackDurationSeconds } from "@/lib/tts";
 import { TranscriptInProgressError } from "@/lib/stt-job";
+import { recapAudioMetadataSelect } from "@/lib/prisma-select";
 import { recapRewriteReason } from "@/lib/queue";
 import { markShowBriefed } from "@/lib/brief-ledger";
 import { DEFAULT_TTS_VOICE, parseTtsVoice } from "@/lib/tts-voice";
@@ -195,7 +196,7 @@ export async function generateEpisodeBrief(
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
     where: { id: episodeId },
-    include: { show: true, brief: true, recapAudio: true },
+    include: { show: true, brief: true, recapAudio: { select: recapAudioMetadataSelect } },
   });
   if (!episode) {
     throw new Error("Episode not found.");

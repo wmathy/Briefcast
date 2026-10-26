@@ -2,12 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { formatBriefDate } from "@/lib/brief";
-import {
-  countLatestFollowedNeedingBrief,
-  countUnbriefedFollowedEpisodes,
-  getFollowedBriefQueue,
-  getFollowedShows,
-} from "@/lib/queue";
+import { getFollowedBriefQueue, getFollowedShows, loadFollowedBriefCounts } from "@/lib/queue";
 import { formatBriefLengthShort } from "@/lib/brief-length";
 import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT } from "@/lib/transcript-complete";
 import { RefreshLibraryButton } from "@/components/RefreshLibraryButton";
@@ -21,12 +16,13 @@ export default async function LibraryPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const [follows, queue, unbriefed, latestNeeding] = await Promise.all([
+  const [follows, queue, briefCounts] = await Promise.all([
     getFollowedShows(user.id),
     getFollowedBriefQueue(user.id),
-    countUnbriefedFollowedEpisodes(user.id),
-    countLatestFollowedNeedingBrief(user.id),
+    loadFollowedBriefCounts(user.id),
   ]);
+  const unbriefed = briefCounts.unbriefed;
+  const latestNeeding = briefCounts.latestNeeding;
 
   return (
     <div className="space-y-8">

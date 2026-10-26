@@ -9,6 +9,7 @@ import { hasXaiKey } from "@/lib/env";
 import type { BriefSegment } from "@/lib/brief";
 import { formatBriefLengthShort, parseBriefLength } from "@/lib/brief-length";
 import { durationHintForRecap } from "@/lib/recap-duration";
+import { recapAudioMetadataSelect, sttJobMetadataSelect } from "@/lib/prisma-select";
 import { FULL_TRANSCRIPT_UNAVAILABLE_SHORT, isPublishedTranscriptBrief } from "@/lib/transcript-complete";
 
 export default async function EpisodePage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +20,12 @@ export default async function EpisodePage({ params }: { params: Promise<{ id: st
   const prisma = getPrisma();
   const episode = await prisma.episode.findUnique({
     where: { id },
-    include: { show: true, brief: true, recapAudio: true, sttJob: true },
+    include: {
+      show: true,
+      brief: true,
+      recapAudio: { select: recapAudioMetadataSelect },
+      sttJob: { select: sttJobMetadataSelect },
+    },
   });
   if (!episode) notFound();
 

@@ -1,3 +1,4 @@
+import { Prisma } from "@/generated/prisma/client";
 import { getPrisma } from "@/lib/db";
 import { hasXaiKey } from "@/lib/env";
 import {
@@ -14,6 +15,7 @@ import {
   shouldAdvanceOlderEpisode,
   takeAutoBriefBatch,
 } from "@/lib/auto-brief-policy";
+import { recapAudioMetadataSelect } from "@/lib/prisma-select";
 import {
   collectWindowedAutoBriefIds,
   recapNeedsRewrite,
@@ -41,6 +43,29 @@ export async function syncShowAndPickAutoBriefs(showId: string, feedUrl: string,
   return { ...sync, autoBriefIds };
 }
 
+/** Status plus transcript length. The body stays in Postgres. */
+async function unfinishedSttEpisodeIds(episodeIds: string[]): Promise<Set<string>> {
+  if (episodeIds.length === 0) return new Set();
+  const prisma = getPrisma();
+  const jobs = await prisma.$queryRaw<
+    Array<{ episodeId: string; status: string; textLength: number | bigint | null }>
+  >(Prisma.sql`
+    SELECT "episodeId", "status", LENGTH("text") AS "textLength"
+    FROM "SttJob"
+    WHERE "episodeId" IN (${Prisma.join(episodeIds)})
+  `);
+  return new Set(
+    jobs
+      .filter((job) =>
+        isUnfinishedSttJob({
+          status: job.status,
+          textLength: job.textLength == null ? 0 : Number(job.textLength),
+        }),
+      )
+      .map((job) => job.episodeId),
+  );
+}
+
 export async function generateAutoBriefs(
   episodeIds: string[],
   options?: { userId?: string },
@@ -53,6 +78,8 @@ export async function generateAutoBriefs(
       inProgress: 0,
       progressed: false,
       errors: [] as string[],
+      unavailableIds: [] as string[],
+      failedIds: [] as string[],
       reason: "missing-xai-key" as const,
     };
   }
@@ -66,13 +93,7 @@ export async function generateAutoBriefs(
   // Keep collectWindowed order (unbriefed newest, then Ready rewrites). Do not
   // re-sort by publishedAt or a Ready #185 can jump ahead of #2549.
   const orderedIds = episodeIds.filter((id) => known.has(id));
-  const jobs = await prisma.sttJob.findMany({
-    where: { episodeId: { in: orderedIds } },
-    select: { episodeId: true, status: true, text: true },
-  });
-  const unfinished = new Set(
-    jobs.filter((job) => isUnfinishedSttJob(job)).map((job) => job.episodeId),
-  );
+  const unfinished = await unfinishedSttEpisodeIds(orderedIds);
 
   let generated = 0;
   let skipped = 0;
@@ -80,6 +101,7 @@ export async function generateAutoBriefs(
   let skippedBusy = false;
   let progressed = false;
   const unavailableIds: string[] = [];
+  const failedIds: string[] = [];
   let progressReason: "transcript-in-progress" | "audio-pending" | null = null;
   let focusTitle: string | null = null;
   const errors: string[] = [];
@@ -87,10 +109,12 @@ export async function generateAutoBriefs(
   for (const id of orderedIds) {
     const episode = await prisma.episode.findUnique({
       where: { id },
-      include: { brief: true, recapAudio: true, show: true },
+      include: { brief: true, recapAudio: { select: recapAudioMetadataSelect }, show: true },
     });
     if (!episode) {
       errors.push(`Episode ${id} was not found.`);
+      unavailableIds.push(id);
+      failedIds.push(id);
       continue;
     }
     const requestedVoice = await resolveEpisodeTtsVoice(episode.showId, options?.userId);
@@ -142,6 +166,11 @@ export async function generateAutoBriefs(
     } catch (error) {
       const message = error instanceof Error ? error.message : "Generate failed.";
       errors.push(`${episode.show.title}: ${message}`);
+      // Keep this episode out of the rest of this drain. The cron retry is the
+      // next attempt; looping it here repeats the same failure every turn.
+      unavailableIds.push(id);
+      failedIds.push(id);
+      continue;
     }
   }
 
@@ -154,6 +183,7 @@ export async function generateAutoBriefs(
     progressed,
     focusTitle,
     unavailableIds,
+    failedIds,
     errors,
     reason:
       progressReason ??
@@ -167,6 +197,7 @@ export async function collectFollowedAutoBriefIds(options?: {
   userId?: string;
   showId?: string;
   skipFeedSync?: boolean;
+  excludeIds?: Iterable<string>;
 }) {
   const prisma = getPrisma();
   const shows = await prisma.show.findMany({
@@ -203,6 +234,7 @@ export async function collectFollowedAutoBriefIds(options?: {
     autoBriefIds: await collectWindowedAutoBriefIds({
       userId: options?.userId,
       showId: options?.showId,
+      excludeIds: options?.excludeIds,
     }),
     syncErrors,
   };
@@ -213,6 +245,7 @@ export async function refreshFollowedBriefs(options?: {
   userId?: string;
   showId?: string;
   skipFeedSync?: boolean;
+  excludeIds?: Iterable<string>;
 }) {
   await purgeNotesOnlyBriefs();
   const poll = await collectFollowedAutoBriefIds(options);
@@ -220,10 +253,15 @@ export async function refreshFollowedBriefs(options?: {
   const generation = await generateAutoBriefs(batch.toGenerate, { userId: options?.userId });
   // Recount after this turn so a persisted draft whose TTS timed out stays queued.
   // Waiting / hop remaining is unbriefed-only — Ready rewrites do not keep hops on #185.
+  // Episodes that already failed or had no full transcript stay excluded so the
+  // recount moves on to another follow instead of returning the same id.
+  const excludeIds = [
+    ...new Set([...(options?.excludeIds ?? []), ...generation.unavailableIds, ...generation.failedIds]),
+  ];
   const stillNeeded = await collectWindowedAutoBriefIds({
     userId: options?.userId,
     showId: options?.showId,
-    excludeIds: generation.unavailableIds,
+    excludeIds,
   });
   return {
     ...poll,

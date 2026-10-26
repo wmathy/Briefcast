@@ -15,18 +15,21 @@ export type PipelineHopResult = {
   skippedBusy?: boolean;
   reason?: string | null;
   errors?: string[];
+  failedIds?: string[];
+  unavailableIds?: string[];
 };
 
 export function pipelineShouldHop(result: PipelineHopResult): boolean {
   if (result.reason === "missing-xai-key") return false;
   const remaining = result.remaining ?? 0;
   if (remaining <= 0) return false;
-  if (result.progressed) return true;
-  if (result.skippedBusy) return true;
+  // Forward progress only. An unprogressed error waits for the 15-minute cron
+  // instead of chaining HTTP hops that repeat the same failure.
+  if (result.progressed === true) return true;
   if ((result.generated ?? 0) > 0) return true;
-  // Another follow’s newest is still queued after this one had no usable transcript.
+  // A busy lock, or a newest with no transcript, can still leave another follow queued.
+  if (result.skippedBusy) return true;
   if (result.reason === "no-full-transcript") return true;
-  if (result.errors && result.errors.length > 0) return true;
   return false;
 }
 
@@ -147,6 +150,7 @@ export async function drainFollowedBriefs(input: {
 }): Promise<PipelineHopResult> {
   const { refreshFollowedBriefs } = await import("@/lib/auto-brief");
   const { pipelineTurnHasBudget } = await import("@/lib/pipeline-turn");
+  const excluded = new Set<string>();
   let result: PipelineHopResult = { remaining: 1 };
   let skipFeedSync = input.skipFeedSync;
   for (let turn = 0; turn < PIPELINE_MAX_HOPS; turn += 1) {
@@ -155,16 +159,28 @@ export async function drainFollowedBriefs(input: {
       userId: input.userId,
       showId: input.showId,
       skipFeedSync,
+      excludeIds: excluded,
     });
     skipFeedSync = true;
+    const blocked = [...(result.failedIds ?? []), ...(result.unavailableIds ?? [])];
+    const repeatedBlock = blocked.length > 0 && blocked.every((id) => excluded.has(id));
+    const novelBlock = blocked.some((id) => !excluded.has(id));
+    for (const id of blocked) excluded.add(id);
     console.info("[pipeline] drain turn", {
       turn,
       progressed: result.progressed,
       remaining: result.remaining,
       reason: result.reason,
       generated: result.generated,
+      excluded: excluded.size,
     });
-    if (!pipelineShouldHop(result)) break;
+    // The same failing episode came back even though it was already excluded.
+    if (repeatedBlock && (result.generated ?? 0) === 0 && result.progressed !== true) break;
+    if (pipelineShouldHop(result)) continue;
+    // This episode failed, but another follow is still eligible. Stay in this
+    // drain and pass the exclusion forward. Do not HTTP-hop on the error.
+    if (novelBlock && (result.remaining ?? 0) > 0) continue;
+    break;
   }
   return result;
 }
