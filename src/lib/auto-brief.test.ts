@@ -78,6 +78,8 @@ describe("newest unfinished STT wins over starting an older episode", () => {
     expect(isUnfinishedSttJob({ status: "pending", text: "" })).toBe(true);
     expect(isUnfinishedSttJob({ status: "running", text: "partial" })).toBe(true);
     expect(isUnfinishedSttJob({ status: "complete", text: "x".repeat(81) })).toBe(false);
+    expect(isUnfinishedSttJob({ status: "complete", textLength: 81 })).toBe(false);
+    expect(isUnfinishedSttJob({ status: "complete", textLength: 80 })).toBe(true);
     expect(isUnfinishedSttJob({ status: "failed", text: "nope" })).toBe(false);
     expect(isUnfinishedSttJob(null)).toBe(false);
   });

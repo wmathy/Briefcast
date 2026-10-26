@@ -1,13 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { refreshFollowedBriefs } from "@/lib/auto-brief";
 import {
   HOP_ACK_MS,
   PIPELINE_MAX_HOPS,
+  drainFollowedBriefs,
   isPipelineHopAuthorized,
   pipelineHopHeaders,
   pipelineHopSecret,
   pipelineHopUrl,
   pipelineShouldHop,
 } from "./pipeline-hop";
+
+vi.mock("@/lib/auto-brief", () => ({
+  refreshFollowedBriefs: vi.fn(),
+}));
 
 describe("pipelineShouldHop", () => {
   it("hops when this turn advanced STT, wrote a brief, or published audio", () => {
@@ -16,8 +22,15 @@ describe("pipelineShouldHop", () => {
     expect(pipelineShouldHop({ remaining: 3, generated: 1, progressed: true })).toBe(true);
   });
 
-  it("retries the next hop after a failed step instead of dying silently", () => {
-    expect(pipelineShouldHop({ remaining: 1, progressed: false, errors: ["xAI TTS error 503"] })).toBe(true);
+  it("does not hop when a turn made no progress even if it recorded errors", () => {
+    expect(
+      pipelineShouldHop({
+        remaining: 1,
+        generated: 0,
+        progressed: false,
+        errors: ["xAI TTS error 503"],
+      }),
+    ).toBe(false);
   });
 
   it("does not spin when every candidate is only a locked STT job", () => {
@@ -68,6 +81,65 @@ describe("pipelineShouldHop", () => {
         reason: "no-full-transcript",
       }),
     ).toBe(true);
+  });
+});
+
+describe("drainFollowedBriefs", () => {
+  const refresh = vi.mocked(refreshFollowedBriefs);
+
+  beforeEach(() => {
+    refresh.mockReset();
+  });
+
+  it("excludes an episode that throws and still briefs the next follow", async () => {
+    refresh.mockImplementation(async (options) => {
+      const exclude = [...(options?.excludeIds ?? [])];
+      if (!exclude.includes("ep-fail")) {
+        return {
+          remaining: 1,
+          generated: 0,
+          progressed: false,
+          errors: ["JRE: xAI TTS error 503"],
+          failedIds: ["ep-fail"],
+          unavailableIds: ["ep-fail"],
+        };
+      }
+      return {
+        remaining: 0,
+        generated: 1,
+        progressed: true,
+        errors: [],
+        failedIds: [],
+        unavailableIds: [],
+      };
+    });
+
+    const result = await drainFollowedBriefs({ userId: "user-1" });
+
+    expect(refresh.mock.calls.length).toBe(2);
+    expect(refresh.mock.calls.length).toBeLessThan(PIPELINE_MAX_HOPS);
+    const secondExclude = [...(refresh.mock.calls[1]?.[0]?.excludeIds ?? [])];
+    expect(secondExclude).toContain("ep-fail");
+    expect(result.generated).toBe(1);
+    expect(result.progressed).toBe(true);
+  });
+
+  it("does not spin the hop cap when the only candidate throws", async () => {
+    refresh.mockResolvedValue({
+      remaining: 0,
+      generated: 0,
+      progressed: false,
+      errors: ["JRE: xAI TTS error 503"],
+      failedIds: ["ep-fail"],
+      unavailableIds: ["ep-fail"],
+    });
+
+    const result = await drainFollowedBriefs({ userId: "user-1" });
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(result.generated).toBe(0);
+    expect(result.progressed).toBe(false);
+    expect(result.remaining).toBe(0);
   });
 });
 

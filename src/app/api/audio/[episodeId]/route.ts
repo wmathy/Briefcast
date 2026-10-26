@@ -15,7 +15,10 @@ export async function GET(
 
   const { episodeId } = await context.params;
   const prisma = getPrisma();
-  const audio = await prisma.recapAudio.findUnique({ where: { episodeId } });
+  const audio = await prisma.recapAudio.findUnique({
+    where: { episodeId },
+    select: { data: true, mimeType: true },
+  });
   if (!audio) {
     return NextResponse.json({ error: "No spoken recap yet." }, { status: 404 });
   }

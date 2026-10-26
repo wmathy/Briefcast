@@ -1,4 +1,5 @@
 import { getPrisma } from "@/lib/db";
+import { recapAudioMetadataSelect } from "@/lib/prisma-select";
 import { recapNeedsRewrite } from "@/lib/queue";
 import { parseTtsVoice } from "@/lib/tts-voice";
 
@@ -40,7 +41,7 @@ export async function detectLatestUnbriefedEpisode(input: {
   const latest = await prisma.episode.findFirst({
     where: { showId: input.showId },
     orderBy: { publishedAt: "desc" },
-    include: { brief: true, recapAudio: true },
+    include: { brief: true, recapAudio: { select: recapAudioMetadataSelect } },
   });
   if (!latest) return { latest: null, alreadyDone: true };
 

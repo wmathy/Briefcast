@@ -21,7 +21,7 @@ export default async function ShowPage({ params }: { params: Promise<{ id: strin
   const show = await prisma.show.findUnique({
     where: { id },
     include: {
-      episodes: { orderBy: { publishedAt: "desc" }, include: { brief: true, recapAudio: true } },
+      episodes: { orderBy: { publishedAt: "desc" }, include: { brief: true } },
       follows: { where: { userId: user.id } },
     },
   });

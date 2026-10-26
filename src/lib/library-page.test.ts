@@ -13,7 +13,7 @@ describe("library homepage queue", () => {
 
   it("loads the followed-show brief queue newest-first helper", () => {
     expect(source).toContain("getFollowedBriefQueue");
-    expect(source).toContain("countUnbriefedFollowedEpisodes");
+    expect(source).toContain("loadFollowedBriefCounts");
     expect(source).toContain("Queue");
   });
 
@@ -29,11 +29,13 @@ describe("library homepage queue", () => {
 
   it("auto-writes the latest brief instead of waiting for a Generate click", () => {
     expect(source).toContain("AutoGenerateLatest");
-    expect(source).toContain("countLatestFollowedNeedingBrief");
+    expect(source).toContain("loadFollowedBriefCounts");
+    expect(source).toContain("latestNeeding");
   });
 
   it("uses the unbriefed counter for waiting, not the Ready play queue", () => {
-    expect(source).toContain("countUnbriefedFollowedEpisodes");
+    expect(source).toContain("loadFollowedBriefCounts");
+    expect(source).toContain("unbriefed");
     expect(source).toContain("waiting");
     expect(source).toContain("getFollowedBriefQueue");
     expect(source).toContain("Ready to play");
